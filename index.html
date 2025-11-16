@@ -1121,13 +1121,21 @@ btnToggleAnalytics.textContent = "Show";
               });
             }
 
-            wrap.appendChild(input);
-            if (!readOnlyInner) {
-              wrap.appendChild(select);
-              wrap.appendChild(rdwBtn);
-            }
-            td.appendChild(wrap);
-            return td;
+          wrap.appendChild(input);
+
+if (!readOnlyInner) {
+  // Editors get the preset dropdown
+  wrap.appendChild(select);
+} else {
+  // Hide the preset in read-only mode
+  select.style.display = "none";
+}
+
+// Always append the RDW pill so active tags are visible in read-only
+wrap.appendChild(rdwBtn);
+
+td.appendChild(wrap);
+return td;
           }
 
           const nameTd = document.createElement("td");
