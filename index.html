@@ -476,7 +476,7 @@
           <div class="flex">
             <select id="analytics-year"></select>
             <button id="btn-refresh-analytics" class="btn btn-sm">Refresh</button>
-            <button id="btn-toggle-analytics" class="btn btn-sm">Hide</button>
+            <button id="btn-toggle-analytics" class="btn btn-sm">Show</button>
           </div>
         </div>
 
@@ -655,6 +655,9 @@
     const coverageSummary = document.getElementById("coverage-summary");
     const rosterFilterInput = document.getElementById("roster-filter");
 
+// Default analytics to collapsed on first load
+analyticsBody.classList.add("hidden");
+btnToggleAnalytics.textContent = "Show";
 
     // ===== AUTH =====
     authForm.addEventListener("submit", async (e) => {
