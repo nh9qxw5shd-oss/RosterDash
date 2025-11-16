@@ -17,8 +17,8 @@
       padding: 0;
       overflow-x: hidden;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #d8dce3; /* darker grey background */
-      color: #0f172a;      /* deep slate/navy text */
+      background: #d8dce3;
+      color: #0f172a;
     }
 
     header {
@@ -144,13 +144,12 @@
       color: #0f172a;
     }
 
-    /* Roster grid: full-width, mostly vertical scrolling */
     .roster-grid {
       max-width: 100%;
       width: 100%;
       max-height: 70vh;
       overflow-y: auto;
-      overflow-x: auto; /* unavoidable on very small screens, but fine on desktops */
+      overflow-x: auto;
       margin-top: 0.5rem;
       background: #eef0f3;
       border-radius: 0.5rem;
@@ -168,6 +167,8 @@
       flex: 1;
       min-width: 0;
       background: #ffffff;
+      font-weight: 700;
+      color: #000000 !important;
     }
     .shift-preset {
       font-size: 0.7rem;
@@ -198,69 +199,50 @@
       border-color: #2c2cd9;
     }
 
-    /* ===== Conditional formatting-ish classes ===== */
-
-    /* Day shifts: pastel orange */
+    /* ===== Conditional formatting ===== */
     .shift-day {
       background: #f1a983;
       color: #7c2d12;
     }
-
-    /* Night shifts: pastel blue */
     .shift-night {
       background: #4d93d9;
       color: #1e3a8a;
     }
-
-    /* Spare: pastel pink/purple */
     .shift-spare {
       background: #d86dcd;
       color: #701a75;
     }
-
-    /* N/A / OOU: pastel yellow */
     .shift-oo {
-      background: #fef9c3;
+      background: #ffff00;
       color: #854d0e;
     }
-
-    /* Annual leave: red, strikethrough */
     .shift-al {
-      background: #fee2e2;
-      color: #991b1b;
+      background: #ff0000;
+      color: #ffffff !important;
       text-decoration: line-through;
     }
-
-    /* Comp leave: orange, strikethrough */
     .shift-cl {
-      background: #ffedd5;
-      color: #9a3412;
+      background: #ff0000;
+      color: #ffffff !important;
       text-decoration: line-through;
     }
-
-    /* Sick: green, strikethrough */
     .shift-sick {
-      background: #ffffff;
-      color: #166534;
+      background: #4d7c0f;
+      color: #ffffff !important;
       text-decoration: line-through;
     }
-
-    /* Rest day */
     .shift-rd {
       background: #f3f4f6;
       color: #6b7280;
       font-style: italic;
     }
-
-    /* B.O – same as A/L through classifyShift; extra emphasis optional */
     .shift-bo {
-      color: #b91c1c;
-      font-weight: 600;
+      background: #ff0000;
+      color: #ffffff !important;
+      text-decoration: line-through;
     }
-
-    /* ROP tags: bold */
     .shift-rop {
-      font-weight: 700;
+      font-weight: 900;
     }
 
     /* Tags and status pills */
@@ -313,10 +295,111 @@
     .mb-2 { margin-bottom: 0.5rem; }
     .w-100 { width: 100%; }
     .hidden { display: none; }
+
+    /* Alt row shading for per-person totals */
+    #analytics-usage-tbody tr:nth-child(even) {
+      background: #e5e7eb;
+    }
+
+    /* Coverage banner styling */
+    .coverage-panel {
+      background: #e0f2fe;
+      border-radius: 0.5rem;
+      border: 1px solid #bae6fd;
+      padding: 0.35rem 0.6rem;
+      font-size: 0.8rem;
+      color: #0f172a;
+    }
+    .coverage-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .coverage-pill {
+      border-radius: 999px;
+      padding: 0.15rem 0.6rem;
+      font-size: 0.75rem;
+      border: 1px solid transparent;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .coverage-pill.cov-good {
+      background: #dcfce7;
+      border-color: #22c55e;
+      color: #166534;
+    }
+    .coverage-pill.cov-amber {
+      background: #fef9c3;
+      border-color: #facc15;
+      color: #854d0e;
+    }
+    .coverage-pill.cov-red {
+      background: #fee2e2;
+      border-color: #ef4444;
+      color: #991b1b;
+    }
+    .coverage-summary-text {
+      font-size: 0.8rem;
+      color: #0f172a;
+    }
+    .coverage-legend {
+      margin-top: 0.35rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      color: #475569;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .legend-swatch {
+      width: 0.75rem;
+      height: 0.75rem;
+      border-radius: 0.2rem;
+      border: 1px solid #cbd5e1;
+    }
+
+    /* Print styling for PDF export */
+    @media print {
+      body {
+        background: #ffffff;
+      }
+      .no-print {
+        display: none !important;
+      }
+      header {
+        display: none !important;
+      }
+      #editor-card {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        margin: 0;
+      }
+      .container {
+        padding: 0;
+        margin: 0;
+      }
+      .roster-grid {
+        max-height: none;
+        overflow: visible;
+        border: none;
+        padding: 0;
+        background: #ffffff;
+      }
+      table {
+        page-break-inside: avoid;
+      }
+    }
   </style>
 </head>
 <body>
-  <header>
+  <header class="no-print">
     <div>
       <h1>Control Roster</h1>
       <span>GitHub-hosted • Supabase-backed • Excel finally retired</span>
@@ -330,7 +413,7 @@
   <div class="container">
 
     <!-- Auth card -->
-    <div id="auth-card" class="card">
+    <div id="auth-card" class="card no-print">
       <h2>Sign in</h2>
       <p class="muted">Use your Supabase email/password account to manage rosters.</p>
       <form id="auth-form" class="flex mt-2">
@@ -350,7 +433,7 @@
     <div id="app" class="hidden">
 
       <!-- Week list -->
-      <div class="card">
+      <div class="card no-print">
         <div class="flex-between">
           <div>
             <h2>Roster weeks</h2>
@@ -365,36 +448,144 @@
           </div>
         </div>
         <div class="mt-2">
-          <table id="weeks-table">
-            <thead>
-              <tr>
-                <th>Week ending</th>
-                <th>Label</th>
-                <th>Status</th>
-                <th>Template</th>
-                <th>Created by</th>
-                <th>Published at</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="weeks-tbody"></tbody>
-          </table>
+         <table id="weeks-table">
+  <thead>
+    <tr>
+      <th>Week ending</th>
+      <th>Label</th>
+      <th>Status</th>
+      <th>Template</th>
+      <th>Published at</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody id="weeks-tbody"></tbody>
+</table>
+        </div>
+      </div>
+
+      <!-- Analytics card -->
+      <div id="analytics-card" class="card no-print">
+        <div class="flex-between">
+          <div>
+            <h2>Analytics</h2>
+            <p class="muted">
+              Annual totals for RDW, leave, sickness & uncovered shifts across all links.
+            </p>
+          </div>
+          <div class="flex">
+            <select id="analytics-year"></select>
+            <button id="btn-refresh-analytics" class="btn btn-sm">Refresh</button>
+            <button id="btn-toggle-analytics" class="btn btn-sm">Hide</button>
+          </div>
+        </div>
+
+        <div id="analytics-body">
+          <div class="mt-2">
+            <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Weekly trends</h3>
+            <p class="muted mb-1">One row per roster week in the selected calendar year.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Week ending</th>
+                  <th>A/L days</th>
+                  <th>C/L days</th>
+                  <th>Sick days</th>
+                  <th>RDW (all)</th>
+                  <th>RDW (Sun)</th>
+                  <th>Uncovered shifts</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-weekly-tbody"></tbody>
+            </table>
+          </div>
+
+          <div class="mt-3">
+            <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Per-person usage</h3>
+            <div class="flex-between mb-1">
+              <p class="muted mb-1">
+                Calendar year totals per staff member (based on roster data).
+              </p>
+              <input
+                id="usage-filter"
+                type="text"
+                placeholder="Filter by name…"
+                style="max-width: 220px;"
+              />
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>A/L days</th>
+                  <th>C/L days</th>
+                  <th>RDW (all)</th>
+                  <th>RDW (Sun)</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-usage-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       <!-- Roster editor -->
-      <div id="editor-card" class="card hidden">
+      <div id="editor-card" class="card">
         <div class="flex-between">
           <div>
             <h2 id="editor-title">Week editor</h2>
             <p id="editor-subtitle" class="muted"></p>
           </div>
-          <div class="flex">
+          <div class="flex no-print">
             <span id="editor-status-pill" class="status-pill"></span>
             <button id="btn-save-week" class="btn btn-primary btn-sm">Save draft</button>
             <button id="btn-publish-week" class="btn btn-sm">Publish</button>
+            <button id="btn-print-week" class="btn btn-sm">Print / PDF</button>
           </div>
         </div>
+        <!-- Per-week roster filter -->
+        <div class="mt-2 no-print" style="max-width:260px;">
+          <input
+            id="roster-filter"
+            type="text"
+            placeholder="Filter this week by name…"
+            style="width:100%;"
+          />
+        </div>
+
+
+        <!-- Coverage / legend panel -->
+        <div id="coverage-banner" class="coverage-panel mt-1">
+          <div class="coverage-top-row">
+            <span id="coverage-pill" class="coverage-pill">
+              Coverage: n/a
+            </span>
+            <span id="coverage-summary" class="coverage-summary-text">
+              No metrics available yet.
+            </span>
+          </div>
+          <div class="coverage-legend">
+            <span class="legend-item">
+              <span class="legend-swatch" style="background:#f1a983;"></span> Day
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch" style="background:#4d93d9;"></span> Night
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch" style="background:#d86dcd;"></span> Spare
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch" style="background:#ff0000;"></span> A/L &amp; B.O
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch" style="background:#4d7c0f;"></span> Sick
+            </span>
+            <span class="legend-item">
+              <span class="legend-swatch" style="background:#f3f4f6;"></span> RD
+            </span>
+          </div>
+        </div>
+
         <div class="mt-2 roster-grid" id="roster-grid"></div>
       </div>
     </div>
@@ -403,15 +594,18 @@
   <script>
     // ===== CONFIG =====
     const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
+    const SUPABASE_ANON_KEY =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
 
     const { createClient } = window.supabase;
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
     let currentProfile = null;
-    let currentWeek = null; // full row from roster_weeks
-    let isPublicViewer = false; // viewer mode flag
+    let currentWeek = null;
+    let isPublicViewer = false;
+
+    let lastUsageStats = [];
 
     // ===== Date formatting helper (UK) =====
     function formatUK(dateStr) {
@@ -424,7 +618,7 @@
       return `${day}/${month}/${year}`;
     }
 
-    // ===== AUTH =====
+    // ===== DOM HOOKS =====
     const authCard = document.getElementById("auth-card");
     const appEl = document.getElementById("app");
     const authForm = document.getElementById("auth-form");
@@ -447,7 +641,22 @@
     const rosterGrid = document.getElementById("roster-grid");
     const btnSaveWeek = document.getElementById("btn-save-week");
     const btnPublishWeek = document.getElementById("btn-publish-week");
+    const btnPrintWeek = document.getElementById("btn-print-week");
 
+    const analyticsYearSelect = document.getElementById("analytics-year");
+    const btnRefreshAnalytics = document.getElementById("btn-refresh-analytics");
+    const btnToggleAnalytics = document.getElementById("btn-toggle-analytics");
+    const analyticsBody = document.getElementById("analytics-body");
+    const analyticsWeeklyTbody = document.getElementById("analytics-weekly-tbody");
+    const analyticsUsageTbody = document.getElementById("analytics-usage-tbody");
+    const usageFilterInput = document.getElementById("usage-filter");
+
+    const coveragePill = document.getElementById("coverage-pill");
+    const coverageSummary = document.getElementById("coverage-summary");
+    const rosterFilterInput = document.getElementById("roster-filter");
+
+
+    // ===== AUTH =====
     authForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       authError.textContent = "";
@@ -495,6 +704,8 @@
 
       await loadTemplates();
       await loadWeeks();
+      await loadAnalyticsYears();
+      await refreshAnalytics();
     });
 
     async function loadProfile() {
@@ -526,6 +737,8 @@
 
       await loadTemplates();
       await loadWeeks();
+      await loadAnalyticsYears();
+      await refreshAnalytics();
     }
 
     (async function init() {
@@ -537,6 +750,7 @@
       }
     })();
 
+    // ===== TEMPLATES =====
     async function loadTemplates() {
       const { data, error } = await supabase
         .from("roster_templates")
@@ -564,7 +778,7 @@
         return;
       }
 
-      const dateStr = newWeekDate.value; // ISO yyyy-mm-dd
+      const dateStr = newWeekDate.value;
       const templateId = newWeekTemplateSelect.value;
       if (!dateStr || !templateId) {
         alert("Pick a week ending date and a template.");
@@ -606,12 +820,15 @@
 
       await loadWeeks();
       await openWeek(data);
+      await loadAnalyticsYears();
+      await refreshAnalytics();
     });
 
+    // ===== WEEK LIST =====
     async function loadWeeks() {
       const { data, error } = await supabase
         .from("roster_weeks")
-        .select("id, week_ending, label, status, template_id, created_at, published_at, created_by, roster_templates(name, code)")
+        .select("id, week_ending, label, status, template_id, created_at, published_at, roster_templates(name, code)")
         .order("week_ending", { ascending: false });
 
       if (error) {
@@ -626,25 +843,25 @@
           ? `${w.roster_templates.code} – ${w.roster_templates.name}`
           : "N/A";
 
-        tr.innerHTML = `
-          <td>${formatUK(w.week_ending)}</td>
-          <td>${w.label || ""}</td>
-          <td>
-            <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
-              ${w.status}
-            </span>
-          </td>
-          <td>${tmplLabel}</td>
-          <td>${w.created_by || ""}</td>
-          <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
-          <td>
-            <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
-          </td>
-        `;
+       tr.innerHTML = `
+  <td>${formatUK(w.week_ending)}</td>
+  <td>${w.label || ""}</td>
+  <td>
+    <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
+      ${w.status}
+    </span>
+  </td>
+  <td>${tmplLabel}</td>
+  <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
+  <td>
+    <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
+  </td>
+`;
+
         weeksTbody.appendChild(tr);
       }
 
-      document.querySelectorAll(".btn-open-week").forEach(btn => {
+      document.querySelectorAll(".btn-open-week").forEach((btn) => {
         btn.addEventListener("click", async () => {
           const id = btn.getAttribute("data-id");
           const { data, error } = await supabase
@@ -670,6 +887,7 @@
       setStatusPill(weekRow.status);
       renderRosterGrid(weekRow.data);
       syncEditorButtons();
+      updateCoverageBanner();
     }
 
     function setStatusPill(status) {
@@ -695,58 +913,40 @@
       btnPublishWeek.textContent = isDraft ? "Publish" : "Re-publish";
     }
 
+    // ===== CLASSIFY SHIFTS =====
     function classifyShift(value) {
       const classes = [];
       if (!value) return "";
 
       const v = String(value).trim().toUpperCase();
 
-      // Day shifts
-      if (v === "0600-1800" || v === "0700-1900" || v === "0630-1830") {
+      if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
         classes.push("shift-day");
       }
-
-      // Night shifts
-      if (v === "1800-0600" || v === "1830-0630") {
+      if (v.includes("1800-0600") || v.includes("1830-0630")) {
         classes.push("shift-night");
       }
-
-      // Spare
       if (v.includes("SPARE")) {
         classes.push("shift-spare");
       }
-
-      // N/A
       if (v === "N/A") {
         classes.push("shift-oo");
       }
-
-      // Annual leave
       if (v.includes("A/L")) {
         classes.push("shift-al");
       }
-
-      // Comp leave
       if (v.includes("C/L")) {
         classes.push("shift-cl");
       }
-
-      // Sick
       if (v.includes("SICK") || v.includes("S/L")) {
         classes.push("shift-sick");
       }
-
-      // Rest day
       if (v === "RD") {
         classes.push("shift-rd");
       }
-
-      // B.O mirrors A/L styling
       if (v.includes("B.O")) {
         classes.push("shift-al");
       }
-
-      // LROP / HROP bold
       if (v.includes("LROP") || v.includes("HROP")) {
         classes.push("shift-rop");
       }
@@ -754,6 +954,21 @@
       return classes.join(" ");
     }
 
+    function ensureUncovered(section) {
+      if (!section.uncovered) {
+        section.uncovered = {
+          sun: "",
+          mon: "",
+          tue: "",
+          wed: "",
+          thu: "",
+          fri: "",
+          sat: "",
+        };
+      }
+    }
+
+    // ===== ROSTER RENDERING =====
     function renderRosterGrid(data) {
       rosterGrid.innerHTML = "";
 
@@ -765,7 +980,9 @@
       const role = currentProfile?.role || "viewer";
       const readOnly = isPublicViewer || role === "viewer";
 
-      data.sections.forEach(section => {
+      data.sections.forEach((section) => {
+        ensureUncovered(section);
+
         const sectionDiv = document.createElement("div");
         sectionDiv.classList.add("mt-3");
 
@@ -798,6 +1015,45 @@
 
         const tbody = document.createElement("tbody");
 
+        // Uncovered row
+        const uncoveredTr = document.createElement("tr");
+
+        const uncoveredNameTd = document.createElement("td");
+        uncoveredNameTd.textContent = "Uncovered shifts";
+        uncoveredNameTd.style.fontWeight = "600";
+        uncoveredNameTd.style.background = "#e5e7eb";
+        uncoveredNameTd.style.textAlign = "left";
+        uncoveredTr.appendChild(uncoveredNameTd);
+
+        const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+        days.forEach((day) => {
+          const td = document.createElement("td");
+          const input = document.createElement("input");
+          input.value = section.uncovered?.[day] || "";
+          input.dataset.sectionId = section.id;
+          input.dataset.day = day;
+          input.className = "shift-input " + classifyShift(input.value);
+
+          const roleInner = currentProfile?.role || "viewer";
+          const readOnlyInner = isPublicViewer || roleInner === "viewer";
+
+          if (readOnlyInner) {
+            input.disabled = true;
+          } else {
+            input.addEventListener("input", handleUncoveredChange);
+          }
+
+          td.appendChild(input);
+          uncoveredTr.appendChild(td);
+        });
+
+        const uncoveredRemarksTd = document.createElement("td");
+        uncoveredRemarksTd.textContent = "";
+        uncoveredTr.appendChild(uncoveredRemarksTd);
+
+        tbody.appendChild(uncoveredTr);
+
+        // Staff rows
         (section.rows || []).forEach((row, rowIndex) => {
           const tr = document.createElement("tr");
 
@@ -816,7 +1072,7 @@
             const select = document.createElement("select");
             select.className = "shift-preset";
             const presetOptions = ["", "0600-1800", "1800-0600", "0700-1900", "0630-1830", "1830-0630"];
-            presetOptions.forEach(val => {
+            presetOptions.forEach((val) => {
               const opt = document.createElement("option");
               opt.value = val;
               opt.textContent = val || "⧉";
@@ -852,7 +1108,7 @@
 
               rdwBtn.addEventListener("click", () => {
                 const sections = currentWeek.data.sections || [];
-                const sec = sections.find(s => s.id === section.id);
+                const sec = sections.find((s) => s.id === section.id);
                 if (!sec) return;
                 if (!sec.rows[rowIndex]) sec.rows[rowIndex] = {};
                 if (!sec.rows[rowIndex].rdw) sec.rows[rowIndex].rdw = {};
@@ -863,8 +1119,10 @@
             }
 
             wrap.appendChild(input);
-            wrap.appendChild(select);
-            wrap.appendChild(rdwBtn);
+            if (!readOnlyInner) {
+              wrap.appendChild(select);
+              wrap.appendChild(rdwBtn);
+            }
             td.appendChild(wrap);
             return td;
           }
@@ -885,7 +1143,7 @@
           nameTd.appendChild(nameInput);
           tr.appendChild(nameTd);
 
-          ["sun","mon","tue","wed","thu","fri","sat"].forEach(day => {
+          ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].forEach((day) => {
             tr.appendChild(makeCell(day));
           });
 
@@ -912,6 +1170,27 @@
         sectionDiv.appendChild(table);
         rosterGrid.appendChild(sectionDiv);
       });
+// Re-apply any active per-week name filter
+      applyRosterFilter();
+    }
+
+    // ===== CHANGE HANDLERS =====
+    function handleUncoveredChange(e) {
+      const role = currentProfile?.role || "viewer";
+      if (isPublicViewer || role === "viewer") return;
+
+      const input = e.target;
+      const sectionId = input.dataset.sectionId;
+      const day = input.dataset.day;
+
+      const sections = currentWeek.data.sections || [];
+      const section = sections.find((s) => s.id === sectionId);
+      if (!section) return;
+
+      ensureUncovered(section);
+      section.uncovered[day] = input.value;
+      input.className = "shift-input " + classifyShift(input.value);
+      updateCoverageBanner();
     }
 
     function handleNameChange(e) {
@@ -923,7 +1202,7 @@
       const rowIndex = parseInt(input.dataset.rowIndex, 10);
 
       const sections = currentWeek.data.sections || [];
-      const section = sections.find(s => s.id === sectionId);
+      const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
       if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
@@ -939,7 +1218,7 @@
       const rowIndex = parseInt(input.dataset.rowIndex, 10);
 
       const sections = currentWeek.data.sections || [];
-      const section = sections.find(s => s.id === sectionId);
+      const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
       if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
@@ -956,7 +1235,7 @@
       const field = input.dataset.field;
 
       const sections = currentWeek.data.sections || [];
-      const section = sections.find(s => s.id === sectionId);
+      const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
       if (!section.rows[rowIndex]) section.rows[rowIndex] = { shifts: {} };
@@ -964,8 +1243,10 @@
       section.rows[rowIndex].shifts[field] = input.value;
 
       input.className = "shift-input " + classifyShift(input.value);
+      updateCoverageBanner();
     }
 
+    // ===== SAVE / PUBLISH / PRINT =====
     btnSaveWeek.addEventListener("click", async () => {
       if (!currentWeek) return;
       const role = currentProfile?.role || "viewer";
@@ -987,14 +1268,18 @@
       alert("Draft saved.");
     });
 
-    btnPublishWeek.addEventListener("click", async () => {
+       btnPublishWeek.addEventListener("click", async () => {
       if (!currentWeek) return;
       const role = currentProfile?.role || "viewer";
       if (isPublicViewer || role === "viewer") return;
 
       const { data, error } = await supabase
         .from("roster_weeks")
-        .update({ status: "published", published_at: new Date().toISOString() })
+        .update({
+          status: "published",
+          published_at: new Date().toISOString(),
+          data: currentWeek.data     // <-- also persist latest roster data
+        })
         .eq("id", currentWeek.id)
         .select("*")
         .single();
@@ -1009,8 +1294,353 @@
       setStatusPill("published");
       syncEditorButtons();
       await loadWeeks();
+      await loadAnalyticsYears();
+      await refreshAnalytics();
       alert("Week published.");
     });
+
+
+    btnPrintWeek.addEventListener("click", () => {
+      if (!currentWeek) {
+        alert("Open a week before printing.");
+        return;
+      }
+      window.print();
+    });
+
+    // ===== ANALYTICS =====
+    async function loadAnalyticsYears() {
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .select("week_ending")
+        .order("week_ending", { ascending: false });
+
+      if (error) {
+        console.error("loadAnalyticsYears error", error);
+        return;
+      }
+
+      const yearsSet = new Set();
+      data.forEach((w) => {
+        if (!w.week_ending) return;
+        const d = new Date(w.week_ending);
+        if (!isNaN(d)) {
+          yearsSet.add(d.getFullYear());
+        }
+      });
+
+      const years = Array.from(yearsSet).sort((a, b) => b - a);
+      analyticsYearSelect.innerHTML = "";
+
+      if (!years.length) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No data";
+        analyticsYearSelect.appendChild(opt);
+        return;
+      }
+
+      years.forEach((y) => {
+        const opt = document.createElement("option");
+        opt.value = String(y);
+        opt.textContent = y;
+        analyticsYearSelect.appendChild(opt);
+      });
+
+      const currentYear = new Date().getFullYear();
+      if (years.includes(currentYear)) {
+        analyticsYearSelect.value = String(currentYear);
+      } else {
+        analyticsYearSelect.value = String(years[0]);
+      }
+    }
+
+    btnRefreshAnalytics.addEventListener("click", () => {
+      refreshAnalytics();
+    });
+
+    btnToggleAnalytics.addEventListener("click", () => {
+      const collapsed = analyticsBody.classList.toggle("hidden");
+      btnToggleAnalytics.textContent = collapsed ? "Show" : "Hide";
+    });
+
+    async function refreshAnalytics() {
+      const year = analyticsYearSelect.value;
+      if (!year) {
+        analyticsWeeklyTbody.innerHTML = "";
+        analyticsUsageTbody.innerHTML = "";
+        return;
+      }
+
+      const start = `${year}-01-01`;
+      const end = `${year}-12-31`;
+
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .select("id, week_ending, label, data")
+        .gte("week_ending", start)
+        .lte("week_ending", end)
+        .order("week_ending", { ascending: true });
+
+      if (error) {
+        console.error("refreshAnalytics error", error);
+        return;
+      }
+
+      const { weeklyStats, usageStats } = computeAnalyticsFromWeeks(data || []);
+      renderWeeklyAnalytics(weeklyStats);
+      lastUsageStats = usageStats;
+      applyUsageFilter();
+    }
+
+    function computeAnalyticsFromWeeks(weeks) {
+      const weeklyStats = [];
+      const usageMap = {};
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      weeks.forEach((w) => {
+        let weekAL = 0;
+        let weekCL = 0;
+        let weekSick = 0;
+        let weekRDWTotal = 0;
+        let weekRDWSun = 0;
+        let weekUncovered = 0;
+
+        const struct = w.data;
+        if (!struct || !Array.isArray(struct.sections)) return;
+
+        struct.sections.forEach((section) => {
+          ensureUncovered(section);
+
+          days.forEach((day) => {
+            const text = (section.uncovered?.[day] || "").trim();
+            if (text) {
+              weekUncovered += 1;
+            }
+          });
+
+          (section.rows || []).forEach((row) => {
+            const staffName = (row.staff_name || "").trim();
+            if (staffName && !usageMap[staffName]) {
+              usageMap[staffName] = { name: staffName, al: 0, cl: 0, rdwTotal: 0, rdwSun: 0 };
+            }
+
+            days.forEach((day) => {
+              const shift = row.shifts?.[day];
+              const v = (shift || "").toUpperCase();
+              if (!v) return;
+
+              const hasAL = v.includes("A/L");
+              const hasCL = v.includes("C/L");
+              const hasSick = v.includes("SICK") || v.includes("S/L");
+
+              if (hasAL) {
+                weekAL++;
+                if (staffName) usageMap[staffName].al++;
+              }
+              if (hasCL) {
+                weekCL++;
+                if (staffName) usageMap[staffName].cl++;
+              }
+              if (hasSick) {
+                weekSick++;
+              }
+
+              const isRDW = row.rdw && row.rdw[day];
+              if (isRDW) {
+                weekRDWTotal++;
+                if (day === "sun") {
+                  weekRDWSun++;
+                }
+                if (staffName) {
+                  usageMap[staffName].rdwTotal++;
+                  if (day === "sun") {
+                    usageMap[staffName].rdwSun++;
+                  }
+                }
+              }
+            });
+          });
+        });
+
+        weeklyStats.push({
+          weekEnding: w.week_ending,
+          label: w.label || "",
+          al: weekAL,
+          cl: weekCL,
+          sick: weekSick,
+          rdwTotal: weekRDWTotal,
+          rdwSun: weekRDWSun,
+          uncovered: weekUncovered,
+        });
+      });
+
+      const usageStats = Object.values(usageMap).filter((u) => u.name);
+      usageStats.sort((a, b) => a.name.localeCompare(b.name));
+
+      return { weeklyStats, usageStats };
+    }
+
+    function renderWeeklyAnalytics(rows) {
+      analyticsWeeklyTbody.innerHTML = "";
+      if (!rows.length) return;
+
+      rows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${formatUK(r.weekEnding)}</td>
+          <td>${r.al}</td>
+          <td>${r.cl}</td>
+          <td>${r.sick}</td>
+          <td>${r.rdwTotal}</td>
+          <td>${r.rdwSun}</td>
+          <td>${r.uncovered}</td>
+        `;
+        analyticsWeeklyTbody.appendChild(tr);
+      });
+    }
+
+    function renderUsageAnalytics(rows) {
+      analyticsUsageTbody.innerHTML = "";
+      if (!rows.length) return;
+
+      rows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="text-align:left;">${r.name}</td>
+          <td>${r.al}</td>
+          <td>${r.cl}</td>
+          <td>${r.rdwTotal}</td>
+          <td>${r.rdwSun}</td>
+        `;
+        analyticsUsageTbody.appendChild(tr);
+      });
+    }
+
+    function applyUsageFilter() {
+      const term = (usageFilterInput.value || "").trim().toLowerCase();
+      if (!term) {
+        renderUsageAnalytics(lastUsageStats);
+      } else {
+        const filtered = lastUsageStats.filter((u) =>
+          u.name.toLowerCase().includes(term)
+        );
+        renderUsageAnalytics(filtered);
+      }
+    }
+
+    usageFilterInput.addEventListener("input", applyUsageFilter);
+    // ===== PER-WEEK ROSTER FILTER =====
+    function applyRosterFilter() {
+      if (!rosterFilterInput) return;
+      const term = (rosterFilterInput.value || "").trim().toLowerCase();
+
+      const tables = rosterGrid.querySelectorAll("table");
+      tables.forEach((table) => {
+        const rows = table.querySelectorAll("tbody tr");
+
+        rows.forEach((tr, index) => {
+          // First row is "Uncovered shifts" – always visible
+          if (index === 0) {
+            tr.style.display = "";
+            return;
+          }
+
+          const nameInput = tr.querySelector("td:first-child input");
+          if (!nameInput) return;
+
+          const name = (nameInput.value || "").toLowerCase();
+
+          if (!term || name.includes(term)) {
+            tr.style.display = "";
+          } else {
+            tr.style.display = "none";
+          }
+        });
+      });
+    }
+
+    if (rosterFilterInput) {
+      rosterFilterInput.addEventListener("input", applyRosterFilter);
+    }
+
+    // ===== COVERAGE BANNER FOR CURRENT WEEK =====
+    function computeWeekMetrics(weekRow) {
+      const stats = { al: 0, cl: 0, sick: 0, rdwTotal: 0, rdwSun: 0, uncovered: 0 };
+      if (!weekRow || !weekRow.data || !Array.isArray(weekRow.data.sections)) return stats;
+
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      weekRow.data.sections.forEach((section) => {
+        ensureUncovered(section);
+
+        // Uncovered
+        days.forEach((day) => {
+          const text = (section.uncovered?.[day] || "").trim();
+          if (text) {
+            stats.uncovered++;
+          }
+        });
+
+        // Staff rows
+        (section.rows || []).forEach((row) => {
+          days.forEach((day) => {
+            const shift = row.shifts?.[day];
+            const v = (shift || "").toUpperCase();
+            if (!v) return;
+
+            const hasAL = v.includes("A/L");
+            const hasCL = v.includes("C/L");
+            const hasSick = v.includes("SICK") || v.includes("S/L");
+
+            if (hasAL) stats.al++;
+            if (hasCL) stats.cl++;
+            if (hasSick) stats.sick++;
+
+            const isRDW = row.rdw && row.rdw[day];
+            if (isRDW) {
+              stats.rdwTotal++;
+              if (day === "sun") stats.rdwSun++;
+            }
+          });
+        });
+      });
+
+      return stats;
+    }
+
+    function updateCoverageBanner() {
+      if (!currentWeek) {
+        coveragePill.textContent = "Coverage: n/a";
+        coveragePill.classList.remove("cov-good", "cov-amber", "cov-red");
+        coverageSummary.textContent = "No metrics available yet.";
+        return;
+      }
+
+      const stats = computeWeekMetrics(currentWeek);
+
+      coveragePill.classList.remove("cov-good", "cov-amber", "cov-red");
+      let label = "n/a";
+      let cls = "";
+
+      if (stats.uncovered === 0) {
+        label = "Green";
+        cls = "cov-good";
+      } else if (stats.uncovered <= 4) {
+        label = "Amber";
+        cls = "cov-amber";
+      } else {
+        label = "Red";
+        cls = "cov-red";
+      }
+
+      coveragePill.textContent = `Coverage: ${label}`;
+      if (cls) coveragePill.classList.add(cls);
+
+      coverageSummary.textContent =
+        `Uncovered: ${stats.uncovered} • ` +
+        `A/L: ${stats.al} • C/L: ${stats.cl} • Sick: ${stats.sick} • ` +
+        `RDW: ${stats.rdwTotal} (Sun ${stats.rdwSun})`;
+    }
   </script>
 </body>
 </html>
