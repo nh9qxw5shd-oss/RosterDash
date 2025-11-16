@@ -9,17 +9,22 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
   <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    /* ===== Global layout ===== */
+    html, body {
+      width: 100%;
+      max-width: 100%;
       margin: 0;
       padding: 0;
-      background: #0f172a;
-      color: #e5e7eb;
+      overflow-x: hidden;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #e5e7eb; /* light grey background */
+      color: #111827;      /* near-black text */
     }
+
     header {
-      padding: 1rem 1.5rem;
-      background: #020617;
-      border-bottom: 1px solid #1f2937;
+      padding: 0.75rem 1rem;
+      background: #ffffff;
+      border-bottom: 1px solid #d1d5db;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -28,127 +33,266 @@
       margin: 0;
       font-size: 1.2rem;
       font-weight: 600;
+      color: #111827;
     }
     header span {
       font-size: 0.85rem;
-      opacity: 0.8;
+      color: #6b7280;
     }
+
     .container {
-      padding: 1.5rem;
-      max-width: 1400px;
-      margin: 0 auto;
+      padding: 0.75rem 1rem;
+      max-width: 100%;
+      width: 100%;
+      margin: 0;
     }
+
     .card {
-      background: #020617;
+      background: #ffffff;
       border-radius: 0.75rem;
-      border: 1px solid #1f2937;
+      border: 1px solid #d1d5db;
       padding: 1rem 1.25rem;
       margin-bottom: 1rem;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
     .card h2 {
       margin: 0 0 0.5rem;
       font-size: 1rem;
+      color: #111827;
     }
     .muted {
-      color: #9ca3af;
+      color: #6b7280;
       font-size: 0.8rem;
     }
+
+    /* ===== Buttons ===== */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 0.3rem;
       padding: 0.45rem 0.8rem;
       border-radius: 999px;
-      border: 1px solid #4b5563;
-      background: #111827;
-      color: #e5e7eb;
+      border: 1px solid #d1d5db;
+      background: #f3f4f6;
+      color: #111827;
       font-size: 0.8rem;
       cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
     }
     .btn:hover {
-      background: #1f2937;
+      background: #e5e7eb;
+      border-color: #cbd5e1;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
     }
     .btn-primary {
-      border-color: #22c55e;
-      background: #16a34a;
+      border-color: #2563eb;
+      background: #3b82f6;
+      color: #ffffff;
     }
     .btn-primary:hover {
-      background: #15803d;
+      background: #2563eb;
+      border-color: #1d4ed8;
     }
     .btn-danger {
-      border-color: #ef4444;
-      background: #b91c1c;
+      border-color: #dc2626;
+      background: #ef4444;
+      color: #ffffff;
     }
     .btn-sm {
       padding: 0.25rem 0.6rem;
       font-size: 0.7rem;
     }
+
+    /* ===== Inputs & selects ===== */
     input, select {
-      background: #020617;
+      background: #f9fafb;
       border-radius: 0.4rem;
-      border: 1px solid #374151;
-      color: #e5e7eb;
+      border: 1px solid #d1d5db;
+      color: #111827;
       padding: 0.35rem 0.55rem;
       font-size: 0.8rem;
     }
-    input:focus, select:focus {
-      outline: 1px solid #22c55e;
-      border-color: #22c55e;
+    input::placeholder {
+      color: #9ca3af;
     }
+    input:focus, select:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+      border-color: #3b82f6;
+    }
+
+    /* ===== Table / roster area ===== */
     table {
       border-collapse: collapse;
       width: 100%;
       font-size: 0.8rem;
+      background: #ffffff;
     }
     th, td {
-      border: 1px solid #1f2937;
+      border: 1px solid #d1d5db;
       padding: 0.3rem 0.4rem;
       text-align: center;
     }
     thead {
-      background: #020617;
+      background: #f3f4f6;
       position: sticky;
       top: 0;
       z-index: 2;
     }
-    .roster-grid {
-      max-height: 70vh;
-      overflow: auto;
-      margin-top: 0.5rem;
+    thead th {
+      font-weight: 600;
+      color: #111827;
     }
 
-    /* Conditional formatting-ish classes */
-    .shift-al   { background: #0f172a; color: #fbbf24; font-weight: 600; } /* A/L */
-    .shift-cl   { background: #0f172a; color: #eab308; font-weight: 600; } /* C/L */
-    .shift-sick { background: #0b1120; color: #f97316; font-weight: 600; } /* SICK */
-    .shift-rd   { background: #020617; color: #6b7280; font-style: italic; } /* RD */
-    .shift-oo   { background: #1e293b; color: #f9fafb; } /* N/A, OOU */
-    .shift-night { background: #020617; border-bottom: 1px solid #22c55e; }
-    .shift-spare { background: #0b1120; color: #38bdf8; }
+    /* Roster grid: full-width, mostly vertical scrolling */
+    .roster-grid {
+      max-width: 100%;
+      width: 100%;
+      max-height: 70vh;
+      overflow-y: auto;
+      overflow-x: auto; /* unavoidable on very small screens, but fine on desktops */
+      margin-top: 0.5rem;
+      background: #f9fafb;
+      border-radius: 0.5rem;
+      border: 1px solid #e5e7eb;
+      padding: 0.25rem;
+    }
 
+    /* ===== Shift cell layout ===== */
+    .shift-cell-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.2rem;
+    }
+    .shift-input {
+      flex: 1;
+      min-width: 0;
+      background: #ffffff;
+    }
+    .shift-preset {
+      font-size: 0.7rem;
+      padding-inline: 0.3rem;
+      background: #f3f4f6;
+    }
+
+    /* RDW pill */
+    .rdw-toggle {
+      display: none;
+      border-radius: 999px;
+      border: 1px solid #cbd5e1;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.65rem;
+      background: #f9fafb;
+      color: #475569;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .shift-cell-wrap:focus-within .rdw-toggle {
+      display: inline-flex;
+    }
+    .rdw-toggle.rdw-active {
+      display: inline-flex;
+      background: #2c2cd9;
+      color: #ffffff;
+      font-weight: 700;
+      border-color: #2c2cd9;
+    }
+
+    /* ===== Conditional formatting-ish classes ===== */
+
+    /* Day shifts: pastel orange */
+    .shift-day {
+      background: #ffedd5;
+      color: #7c2d12;
+    }
+
+    /* Night shifts: pastel blue */
+    .shift-night {
+      background: #dbeafe;
+      color: #1e3a8a;
+    }
+
+    /* Spare: pastel pink/purple */
+    .shift-spare {
+      background: #fae8ff;
+      color: #701a75;
+    }
+
+    /* N/A / OOU: pastel yellow */
+    .shift-oo {
+      background: #fef9c3;
+      color: #854d0e;
+    }
+
+    /* Annual leave: red, strikethrough */
+    .shift-al {
+      background: #fee2e2;
+      color: #991b1b;
+      text-decoration: line-through;
+    }
+
+    /* Comp leave: orange, strikethrough */
+    .shift-cl {
+      background: #ffedd5;
+      color: #9a3412;
+      text-decoration: line-through;
+    }
+
+    /* Sick: green, strikethrough */
+    .shift-sick {
+      background: #dcfce7;
+      color: #166534;
+      text-decoration: line-through;
+    }
+
+    /* Rest day */
+    .shift-rd {
+      background: #f9fafb;
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    /* B.O – same as A/L through classifyShift; extra emphasis optional */
+    .shift-bo {
+      color: #b91c1c;
+      font-weight: 600;
+    }
+
+    /* ROP tags: bold */
+    .shift-rop {
+      font-weight: 700;
+    }
+
+    /* Tags and status pills */
     .tag {
       display: inline-flex;
       align-items: center;
       border-radius: 999px;
       padding: 0.15rem 0.4rem;
       font-size: 0.7rem;
-      border: 1px solid #374151;
-      color: #9ca3af;
+      border: 1px solid #e5e7eb;
+      color: #4b5563;
+      background: #f9fafb;
     }
     .status-pill {
       padding: 0.15rem 0.5rem;
       border-radius: 999px;
       font-size: 0.7rem;
-      border: 1px solid #4b5563;
+      border: 1px solid #d1d5db;
+      background: #ffffff;
     }
     .status-draft {
-      border-color: #eab308;
-      color: #eab308;
+      border-color: #f59e0b;
+      color: #92400e;
+      background: #fffbeb;
     }
     .status-published {
       border-color: #22c55e;
-      color: #22c55e;
+      color: #15803d;
+      background: #ecfdf3;
     }
+
+    /* Layout helpers */
     .flex {
       display: flex;
       align-items: center;
@@ -216,7 +360,6 @@
             <input type="date" id="new-week-date" />
             <select id="new-week-template">
               <option value="">Template…</option>
-              <!-- Populated from Supabase -->
             </select>
             <button id="btn-create-week" class="btn btn-primary">New draft from template</button>
           </div>
@@ -234,9 +377,7 @@
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="weeks-tbody">
-              <!-- populated in JS -->
-            </tbody>
+            <tbody id="weeks-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -254,9 +395,7 @@
             <button id="btn-publish-week" class="btn btn-sm">Publish</button>
           </div>
         </div>
-        <div class="mt-2 roster-grid" id="roster-grid">
-          <!-- Tables rendered here -->
-        </div>
+        <div class="mt-2 roster-grid" id="roster-grid"></div>
       </div>
     </div>
   </div>
@@ -274,6 +413,17 @@
     let currentWeek = null; // full row from roster_weeks
     let isPublicViewer = false; // viewer mode flag
 
+    // ===== Date formatting helper (UK) =====
+    function formatUK(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      if (isNaN(d)) return dateStr;
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
     // ===== AUTH =====
     const authCard = document.getElementById("auth-card");
     const appEl = document.getElementById("app");
@@ -285,13 +435,11 @@
     const btnSignout = document.getElementById("btn-signout");
     const btnViewer = document.getElementById("btn-viewer");
 
-    // Week controls
     const newWeekTemplateSelect = document.getElementById("new-week-template");
     const weeksTbody = document.getElementById("weeks-tbody");
     const newWeekDate = document.getElementById("new-week-date");
     const btnCreateWeek = document.getElementById("btn-create-week");
 
-    // Editor controls
     const editorCard = document.getElementById("editor-card");
     const editorTitle = document.getElementById("editor-title");
     const editorSubtitle = document.getElementById("editor-subtitle");
@@ -357,9 +505,7 @@
         .eq("id", currentUser.id)
         .single();
 
-      if (!error) {
-        currentProfile = data;
-      }
+      if (!error) currentProfile = data;
     }
 
     async function postLoginInit() {
@@ -382,7 +528,6 @@
       await loadWeeks();
     }
 
-    // Check existing session on load
     (async function init() {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
@@ -392,7 +537,6 @@
       }
     })();
 
-    // ===== TEMPLATES =====
     async function loadTemplates() {
       const { data, error } = await supabase
         .from("roster_templates")
@@ -413,7 +557,6 @@
       }
     }
 
-    // ===== WEEK LIST =====
     btnCreateWeek.addEventListener("click", async () => {
       const role = currentProfile?.role || "viewer";
       if (isPublicViewer || !(role === "editor" || role === "admin")) {
@@ -421,7 +564,7 @@
         return;
       }
 
-      const dateStr = newWeekDate.value;
+      const dateStr = newWeekDate.value; // ISO yyyy-mm-dd
       const templateId = newWeekTemplateSelect.value;
       if (!dateStr || !templateId) {
         alert("Pick a week ending date and a template.");
@@ -440,7 +583,7 @@
         return;
       }
 
-      const label = `Week - Ending ${dateStr}`;
+      const label = `Week - Ending ${formatUK(dateStr)}`;
       const payload = {
         week_ending: dateStr,
         label,
@@ -479,13 +622,12 @@
       weeksTbody.innerHTML = "";
       for (const w of data) {
         const tr = document.createElement("tr");
-
         const tmplLabel = w.roster_templates
           ? `${w.roster_templates.code} – ${w.roster_templates.name}`
           : "N/A";
 
         tr.innerHTML = `
-          <td>${w.week_ending || ""}</td>
+          <td>${formatUK(w.week_ending)}</td>
           <td>${w.label || ""}</td>
           <td>
             <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
@@ -494,7 +636,7 @@
           </td>
           <td>${tmplLabel}</td>
           <td>${w.created_by || ""}</td>
-          <td>${w.published_at ? new Date(w.published_at).toLocaleString() : ""}</td>
+          <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
           <td>
             <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
           </td>
@@ -520,15 +662,12 @@
       });
     }
 
-    // ===== ROSTER EDITOR =====
     async function openWeek(weekRow) {
       currentWeek = weekRow;
       editorCard.classList.remove("hidden");
-
-      editorTitle.textContent = `Week ending ${weekRow.week_ending}`;
+      editorTitle.textContent = `Week ending ${formatUK(weekRow.week_ending)}`;
       editorSubtitle.textContent = weekRow.label || "";
       setStatusPill(weekRow.status);
-
       renderRosterGrid(weekRow.data);
       syncEditorButtons();
     }
@@ -557,19 +696,62 @@
     }
 
     function classifyShift(value) {
+      const classes = [];
       if (!value) return "";
+
       const v = String(value).trim().toUpperCase();
 
-      if (v.includes("A/L")) return "shift-al";
-      if (v.includes("C/L")) return "shift-cl";
-      if (v.includes("SICK") || v.includes("S/L")) return "shift-sick";
-      if (v === "RD") return "shift-rd";
-      if (v === "N/A" || v.includes("OOU")) return "shift-oo";
-      if (v.includes("SPARE")) return "shift-spare";
-      if (/(\d{4}-\d{4})/.test(v) && (v.includes("1800") || v.includes("2000") || v.includes("2200"))) {
-        return "shift-night";
+      // Day shifts
+      if (v === "0600-1800" || v === "0700-1900" || v === "0630-1830") {
+        classes.push("shift-day");
       }
-      return "";
+
+      // Night shifts
+      if (v === "1800-0600" || v === "1830-0630") {
+        classes.push("shift-night");
+      }
+
+      // Spare
+      if (v.includes("SPARE")) {
+        classes.push("shift-spare");
+      }
+
+      // N/A
+      if (v === "N/A") {
+        classes.push("shift-oo");
+      }
+
+      // Annual leave
+      if (v.includes("A/L")) {
+        classes.push("shift-al");
+      }
+
+      // Comp leave
+      if (v.includes("C/L")) {
+        classes.push("shift-cl");
+      }
+
+      // Sick
+      if (v.includes("SICK") || v.includes("S/L")) {
+        classes.push("shift-sick");
+      }
+
+      // Rest day
+      if (v === "RD") {
+        classes.push("shift-rd");
+      }
+
+      // B.O mirrors A/L styling
+      if (v.includes("B.O")) {
+        classes.push("shift-al");
+      }
+
+      // LROP / HROP bold
+      if (v.includes("LROP") || v.includes("HROP")) {
+        classes.push("shift-rop");
+      }
+
+      return classes.join(" ");
     }
 
     function renderRosterGrid(data) {
@@ -591,7 +773,7 @@
         headerDiv.classList.add("flex-between", "mb-1");
         headerDiv.innerHTML = `
           <div class="flex">
-            <h3 style="margin:0;font-size:0.95rem;">${section.title || "Section"}</h3>
+            <h3 style="margin:0;font-size:0.95rem;color:#111827;">${section.title || "Section"}</h3>
             ${section.note ? `<span class="tag">${section.note}</span>` : ""}
           </div>
         `;
@@ -621,24 +803,72 @@
 
           function makeCell(key) {
             const td = document.createElement("td");
+            const wrap = document.createElement("div");
+            wrap.className = "shift-cell-wrap";
+
             const input = document.createElement("input");
             input.value = row.shifts?.[key] || "";
             input.dataset.sectionId = section.id;
             input.dataset.rowIndex = rowIndex;
             input.dataset.field = key;
-            input.className = classifyShift(input.value);
+            input.className = "shift-input " + classifyShift(input.value);
 
-            if (readOnly) {
-              input.disabled = true;
-            } else {
-              input.addEventListener("input", handleShiftChange);
+            const select = document.createElement("select");
+            select.className = "shift-preset";
+            const presetOptions = ["", "0600-1800", "1800-0600", "0700-1900", "0630-1830", "1830-0630"];
+            presetOptions.forEach(val => {
+              const opt = document.createElement("option");
+              opt.value = val;
+              opt.textContent = val || "⧉";
+              select.appendChild(opt);
+            });
+
+            const rdwBtn = document.createElement("button");
+            rdwBtn.type = "button";
+            rdwBtn.textContent = "RDW";
+            rdwBtn.className = "rdw-toggle";
+
+            const rdwActive = row.rdw && row.rdw[key];
+            if (rdwActive) {
+              rdwBtn.classList.add("rdw-active");
             }
 
-            td.appendChild(input);
+            const roleInner = currentProfile?.role || "viewer";
+            const readOnlyInner = isPublicViewer || roleInner === "viewer";
+
+            if (readOnlyInner) {
+              input.disabled = true;
+              select.disabled = true;
+              select.style.display = "none";
+              rdwBtn.disabled = true;
+            } else {
+              input.addEventListener("input", handleShiftChange);
+
+              select.addEventListener("change", () => {
+                if (!select.value) return;
+                input.value = select.value;
+                handleShiftChange({ target: input });
+              });
+
+              rdwBtn.addEventListener("click", () => {
+                const sections = currentWeek.data.sections || [];
+                const sec = sections.find(s => s.id === section.id);
+                if (!sec) return;
+                if (!sec.rows[rowIndex]) sec.rows[rowIndex] = {};
+                if (!sec.rows[rowIndex].rdw) sec.rows[rowIndex].rdw = {};
+                const current = !!sec.rows[rowIndex].rdw[key];
+                sec.rows[rowIndex].rdw[key] = !current;
+                rdwBtn.classList.toggle("rdw-active", !current);
+              });
+            }
+
+            wrap.appendChild(input);
+            wrap.appendChild(select);
+            wrap.appendChild(rdwBtn);
+            td.appendChild(wrap);
             return td;
           }
 
-          // Name cell
           const nameTd = document.createElement("td");
           const nameInput = document.createElement("input");
           nameInput.value = row.staff_name || "";
@@ -655,12 +885,10 @@
           nameTd.appendChild(nameInput);
           tr.appendChild(nameTd);
 
-          // Days
           ["sun","mon","tue","wed","thu","fri","sat"].forEach(day => {
             tr.appendChild(makeCell(day));
           });
 
-          // Remarks
           const remarksTd = document.createElement("td");
           const remarksInput = document.createElement("input");
           remarksInput.value = row.remarks || "";
@@ -735,7 +963,7 @@
       if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
       section.rows[rowIndex].shifts[field] = input.value;
 
-      input.className = classifyShift(input.value);
+      input.className = "shift-input " + classifyShift(input.value);
     }
 
     btnSaveWeek.addEventListener("click", async () => {
@@ -783,7 +1011,6 @@
       await loadWeeks();
       alert("Week published.");
     });
-
   </script>
 </body>
 </html>
