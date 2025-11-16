@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Control Roster</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Supabase JS CDN -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    header {
+      padding: 1rem 1.5rem;
+      background: #020617;
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    header span {
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    .container {
+      padding: 1.5rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #020617;
+      border-radius: 0.75rem;
+      border: 1px solid #1f2937;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+    }
+    .muted {
+      color: #9ca3af;
+      font-size: 0.8rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.45rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      background: #111827;
+      color: #e5e7eb;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background: #1f2937;
+    }
+    .btn-primary {
+      border-color: #22c55e;
+      background: #16a34a;
+    }
+    .btn-primary:hover {
+      background: #15803d;
+    }
+    .btn-danger {
+      border-color: #ef4444;
+      background: #b91c1c;
+    }
+    .btn-sm {
+      padding: 0.25rem 0.6rem;
+      font-size: 0.7rem;
+    }
+    input, select {
+      background: #020617;
+      border-radius: 0.4rem;
+      border: 1px solid #374151;
+      color: #e5e7eb;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.8rem;
+    }
+    input:focus, select:focus {
+      outline: 1px solid #22c55e;
+      border-color: #22c55e;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+    th, td {
+      border: 1px solid #1f2937;
+      padding: 0.3rem 0.4rem;
+      text-align: center;
+    }
+    thead {
+      background: #020617;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .roster-grid {
+      max-height: 70vh;
+      overflow: auto;
+      margin-top: 0.5rem;
+    }
+
+    /* Conditional formatting-ish classes */
+    .shift-al   { background: #0f172a; color: #fbbf24; font-weight: 600; } /* A/L */
+    .shift-cl   { background: #0f172a; color: #eab308; font-weight: 600; } /* C/L */
+    .shift-sick { background: #0b1120; color: #f97316; font-weight: 600; } /* SICK */
+    .shift-rd   { background: #020617; color: #6b7280; font-style: italic; } /* RD */
+    .shift-oo   { background: #1e293b; color: #f9fafb; } /* N/A, OOU */
+    .shift-night { background: #020617; border-bottom: 1px solid #22c55e; }
+    .shift-spare { background: #0b1120; color: #38bdf8; }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.7rem;
+      border: 1px solid #374151;
+      color: #9ca3af;
+    }
+    .status-pill {
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid #4b5563;
+    }
+    .status-draft {
+      border-color: #eab308;
+      color: #eab308;
+    }
+    .status-published {
+      border-color: #22c55e;
+      color: #22c55e;
+    }
+    .flex {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .flex-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .mt-1 { margin-top: 0.25rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-3 { margin-top: 0.75rem; }
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+    .w-100 { width: 100%; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Control Roster</h1>
+      <span>GitHub-hosted • Supabase-backed • Excel finally retired</span>
+    </div>
+    <div class="flex">
+      <span id="user-info" class="muted">Not signed in</span>
+      <button id="btn-signout" class="btn btn-sm hidden">Sign out</button>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Auth card -->
+    <div id="auth-card" class="card">
+      <h2>Sign in</h2>
+      <p class="muted">Use your Supabase email/password account to manage rosters.</p>
+      <form id="auth-form" class="flex mt-2">
+        <input type="email" id="auth-email" placeholder="Email" required />
+        <input type="password" id="auth-password" placeholder="Password" required />
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+      <p id="auth-error" class="muted mt-2"></p>
+    </div>
+
+    <!-- Main app -->
+    <div id="app" class="hidden">
+
+      <!-- Week list -->
+      <div class="card">
+        <div class="flex-between">
+          <div>
+            <h2>Roster weeks</h2>
+            <p class="muted">Draft & published rosters, one record per week ending.</p>
+          </div>
+          <div class="flex">
+            <input type="date" id="new-week-date" />
+            <select id="new-week-template">
+              <option value="">Template…</option>
+              <!-- Populated from Supabase -->
+            </select>
+            <button id="btn-create-week" class="btn btn-primary">New draft from template</button>
+          </div>
+        </div>
+        <div class="mt-2">
+          <table id="weeks-table">
+            <thead>
+              <tr>
+                <th>Week ending</th>
+                <th>Label</th>
+                <th>Status</th>
+                <th>Template</th>
+                <th>Created by</th>
+                <th>Published at</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="weeks-tbody">
+              <!-- populated in JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Roster editor -->
+      <div id="editor-card" class="card hidden">
+        <div class="flex-between">
+          <div>
+            <h2 id="editor-title">Week editor</h2>
+            <p id="editor-subtitle" class="muted"></p>
+          </div>
+          <div class="flex">
+            <span id="editor-status-pill" class="status-pill"></span>
+            <button id="btn-save-week" class="btn btn-primary btn-sm">Save draft</button>
+            <button id="btn-publish-week" class="btn btn-sm">Publish</button>
+          </div>
+        </div>
+        <div class="mt-2 roster-grid" id="roster-grid">
+          <!-- Tables rendered here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== CONFIG =====
+    const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
+
+    const { createClient } = window.supabase;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let currentUser = null;
+    let currentProfile = null;
+    let currentWeek = null; // full row from roster_weeks
+
+    // ===== AUTH =====
+    const authCard = document.getElementById("auth-card");
+    const appEl = document.getElementById("app");
+    const authForm = document.getElementById("auth-form");
+    const authEmail = document.getElementById("auth-email");
+    const authPassword = document.getElementById("auth-password");
+    const authError = document.getElementById("auth-error");
+    const userInfo = document.getElementById("user-info");
+    const btnSignout = document.getElementById("btn-signout");
+
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      authError.textContent = "";
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        authError.textContent = error.message;
+        return;
+      }
+      currentUser = data.user;
+      await loadProfile();
+      await postLoginInit();
+    });
+
+    btnSignout.addEventListener("click", async () => {
+      await supabase.auth.signOut();
+      currentUser = null;
+      currentProfile = null;
+      currentWeek = null;
+      userInfo.textContent = "Not signed in";
+      btnSignout.classList.add("hidden");
+      authCard.classList.remove("hidden");
+      appEl.classList.add("hidden");
+    });
+
+    async function loadProfile() {
+      if (!currentUser) return;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUser.id)
+        .single();
+
+      if (!error) {
+        currentProfile = data;
+      }
+    }
+
+    async function postLoginInit() {
+      userInfo.textContent = currentProfile
+        ? `${currentProfile.full_name || currentUser.email} • ${currentProfile.role}`
+        : currentUser.email;
+
+      btnSignout.classList.remove("hidden");
+      authCard.classList.add("hidden");
+      appEl.classList.remove("hidden");
+      await loadTemplates();
+      await loadWeeks();
+    }
+
+    // Check existing session on load
+    (async function init() {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        currentUser = data.session.user;
+        await loadProfile();
+        await postLoginInit();
+      }
+    })();
+
+    // ===== TEMPLATES =====
+    const newWeekTemplateSelect = document.getElementById("new-week-template");
+
+    async function loadTemplates() {
+      const { data, error } = await supabase
+        .from("roster_templates")
+        .select("id, name, code")
+        .order("code", { ascending: true });
+
+      if (error) {
+        console.error("loadTemplates error", error);
+        return;
+      }
+
+      newWeekTemplateSelect.innerHTML = '<option value="">Template…</option>';
+      for (const t of data) {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = `${t.code} – ${t.name}`;
+        newWeekTemplateSelect.appendChild(opt);
+      }
+    }
+
+    // ===== WEEK LIST =====
+    const weeksTbody = document.getElementById("weeks-tbody");
+    const newWeekDate = document.getElementById("new-week-date");
+    const btnCreateWeek = document.getElementById("btn-create-week");
+
+    btnCreateWeek.addEventListener("click", async () => {
+      const dateStr = newWeekDate.value;
+      const templateId = newWeekTemplateSelect.value;
+      if (!dateStr || !templateId) {
+        alert("Pick a week ending date and a template.");
+        return;
+      }
+
+      // Load template structure
+      const { data: tmpl, error: tmplErr } = await supabase
+        .from("roster_templates")
+        .select("id, name, code, structure")
+        .eq("id", templateId)
+        .single();
+
+      if (tmplErr) {
+        console.error(tmplErr);
+        alert("Unable to load template.");
+        return;
+      }
+
+      const label = `Week - Ending ${dateStr}`;
+      const payload = {
+        week_ending: dateStr,
+        label,
+        status: "draft",
+        template_id: tmpl.id,
+        data: tmpl.structure,
+      };
+
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .insert(payload)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error(error);
+        alert("Error creating week.");
+        return;
+      }
+
+      await loadWeeks();
+      await openWeek(data);
+    });
+
+    async function loadWeeks() {
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .select("id, week_ending, label, status, template_id, created_at, published_at, created_by, roster_templates(name, code)")
+        .order("week_ending", { ascending: false });
+
+      if (error) {
+        console.error("loadWeeks error", error);
+        return;
+      }
+
+      weeksTbody.innerHTML = "";
+      for (const w of data) {
+        const tr = document.createElement("tr");
+
+        const tmplLabel = w.roster_templates
+          ? `${w.roster_templates.code} – ${w.roster_templates.name}`
+          : "N/A";
+
+        tr.innerHTML = `
+          <td>${w.week_ending || ""}</td>
+          <td>${w.label || ""}</td>
+          <td>
+            <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
+              ${w.status}
+            </span>
+          </td>
+          <td>${tmplLabel}</td>
+          <td>${w.created_by || ""}</td>
+          <td>${w.published_at ? new Date(w.published_at).toLocaleString() : ""}</td>
+          <td>
+            <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
+          </td>
+        `;
+        weeksTbody.appendChild(tr);
+      }
+
+      document.querySelectorAll(".btn-open-week").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-id");
+          const { data, error } = await supabase
+            .from("roster_weeks")
+            .select("*")
+            .eq("id", id)
+            .single();
+
+          if (error) {
+            console.error(error);
+            return;
+          }
+          await openWeek(data);
+        });
+      });
+    }
+
+    // ===== ROSTER EDITOR =====
+    const editorCard = document.getElementById("editor-card");
+    const editorTitle = document.getElementById("editor-title");
+    const editorSubtitle = document.getElementById("editor-subtitle");
+    const editorStatusPill = document.getElementById("editor-status-pill");
+    const rosterGrid = document.getElementById("roster-grid");
+    const btnSaveWeek = document.getElementById("btn-save-week");
+    const btnPublishWeek = document.getElementById("btn-publish-week");
+
+    async function openWeek(weekRow) {
+      currentWeek = weekRow;
+      editorCard.classList.remove("hidden");
+
+      editorTitle.textContent = `Week ending ${weekRow.week_ending}`;
+      editorSubtitle.textContent = weekRow.label || "";
+      setStatusPill(weekRow.status);
+
+      renderRosterGrid(weekRow.data);
+      syncEditorButtons();
+    }
+
+    function setStatusPill(status) {
+      editorStatusPill.textContent = status;
+      editorStatusPill.classList.remove("status-draft", "status-published");
+      editorStatusPill.classList.add(status === "published" ? "status-published" : "status-draft");
+    }
+
+    function syncEditorButtons() {
+      const role = currentProfile?.role || "viewer";
+      const isEditor = role === "editor" || role === "admin";
+      const isDraft = currentWeek?.status === "draft";
+
+      btnSaveWeek.disabled = !(isEditor && isDraft);
+      btnPublishWeek.disabled = !isEditor;
+      btnPublishWeek.textContent = isDraft ? "Publish" : "Re-publish";
+    }
+
+    function classifyShift(value) {
+      if (!value) return "";
+      const v = String(value).trim().toUpperCase();
+
+      if (v.includes("A/L")) return "shift-al";
+      if (v.includes("C/L")) return "shift-cl";
+      if (v.includes("SICK") || v.includes("S/L")) return "shift-sick";
+      if (v === "RD") return "shift-rd";
+      if (v === "N/A" || v.includes("OOU")) return "shift-oo";
+      if (v.includes("SPARE")) return "shift-spare";
+      if (/(\d{4}-\d{4})/.test(v) && (v.includes("1800") || v.includes("2000") || v.includes("2200"))) {
+        return "shift-night";
+      }
+      return "";
+    }
+
+    function renderRosterGrid(data) {
+      rosterGrid.innerHTML = "";
+
+      if (!data || !Array.isArray(data.sections)) {
+        rosterGrid.innerHTML = "<p class='muted'>No sections defined in this roster.</p>";
+        return;
+      }
+
+      data.sections.forEach(section => {
+        const sectionDiv = document.createElement("div");
+        sectionDiv.classList.add("mt-3");
+
+        const headerDiv = document.createElement("div");
+        headerDiv.classList.add("flex-between", "mb-1");
+        headerDiv.innerHTML = `
+          <div class="flex">
+            <h3 style="margin:0;font-size:0.95rem;">${section.title || "Section"}</h3>
+            ${section.note ? `<span class="tag">${section.note}</span>` : ""}
+          </div>
+        `;
+        sectionDiv.appendChild(headerDiv);
+
+        const table = document.createElement("table");
+        const thead = document.createElement("thead");
+        thead.innerHTML = `
+          <tr>
+            <th>Name</th>
+            <th>Sun</th>
+            <th>Mon</th>
+            <th>Tue</th>
+            <th>Wed</th>
+            <th>Thu</th>
+            <th>Fri</th>
+            <th>Sat</th>
+            <th>Remarks</th>
+          </tr>
+        `;
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+
+        (section.rows || []).forEach((row, rowIndex) => {
+          const tr = document.createElement("tr");
+
+          function makeCell(key) {
+            const td = document.createElement("td");
+            const input = document.createElement("input");
+            input.value = row.shifts?.[key] || "";
+            input.dataset.sectionId = section.id;
+            input.dataset.rowIndex = rowIndex;
+            input.dataset.field = key;
+            input.className = classifyShift(input.value);
+            input.addEventListener("input", handleShiftChange);
+            td.appendChild(input);
+            return td;
+          }
+
+          // Name cell (edit name directly)
+          const nameTd = document.createElement("td");
+          const nameInput = document.createElement("input");
+          nameInput.value = row.staff_name || "";
+          nameInput.dataset.sectionId = section.id;
+          nameInput.dataset.rowIndex = rowIndex;
+          nameInput.dataset.field = "staff_name";
+          nameInput.addEventListener("input", handleNameChange);
+          nameTd.appendChild(nameInput);
+          tr.appendChild(nameTd);
+
+          // Days
+          ["sun","mon","tue","wed","thu","fri","sat"].forEach(day => {
+            tr.appendChild(makeCell(day));
+          });
+
+          // Remarks
+          const remarksTd = document.createElement("td");
+          const remarksInput = document.createElement("input");
+          remarksInput.value = row.remarks || "";
+          remarksInput.dataset.sectionId = section.id;
+          remarksInput.dataset.rowIndex = rowIndex;
+          remarksInput.dataset.field = "remarks";
+          remarksInput.addEventListener("input", handleRemarksChange);
+          remarksTd.appendChild(remarksInput);
+          tr.appendChild(remarksTd);
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        sectionDiv.appendChild(table);
+        rosterGrid.appendChild(sectionDiv);
+      });
+    }
+
+    function handleNameChange(e) {
+      const role = currentProfile?.role || "viewer";
+      if (role === "viewer") return;
+
+      const input = e.target;
+      const sectionId = input.dataset.sectionId;
+      const rowIndex = parseInt(input.dataset.rowIndex, 10);
+
+      const sections = currentWeek.data.sections || [];
+      const section = sections.find(s => s.id === sectionId);
+      if (!section) return;
+
+      if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
+      section.rows[rowIndex].staff_name = input.value;
+    }
+
+    function handleRemarksChange(e) {
+      const role = currentProfile?.role || "viewer";
+      if (role === "viewer") return;
+
+      const input = e.target;
+      const sectionId = input.dataset.sectionId;
+      const rowIndex = parseInt(input.dataset.rowIndex, 10);
+
+      const sections = currentWeek.data.sections || [];
+      const section = sections.find(s => s.id === sectionId);
+      if (!section) return;
+
+      if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
+      section.rows[rowIndex].remarks = input.value;
+    }
+
+    function handleShiftChange(e) {
+      const role = currentProfile?.role || "viewer";
+      if (role === "viewer") return;
+
+      const input = e.target;
+      const sectionId = input.dataset.sectionId;
+      const rowIndex = parseInt(input.dataset.rowIndex, 10);
+      const field = input.dataset.field;
+
+      const sections = currentWeek.data.sections || [];
+      const section = sections.find(s => s.id === sectionId);
+      if (!section) return;
+
+      if (!section.rows[rowIndex]) section.rows[rowIndex] = { shifts: {} };
+      if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
+      section.rows[rowIndex].shifts[field] = input.value;
+
+      // Update conditional class
+      input.className = classifyShift(input.value);
+    }
+
+    btnSaveWeek.addEventListener("click", async () => {
+      if (!currentWeek) return;
+      const role = currentProfile?.role || "viewer";
+      if (role === "viewer") return;
+
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .update({ data: currentWeek.data })
+        .eq("id", currentWeek.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error(error);
+        alert("Error saving week.");
+        return;
+      }
+      currentWeek = data;
+      alert("Draft saved.");
+    });
+
+    btnPublishWeek.addEventListener("click", async () => {
+      if (!currentWeek) return;
+      const role = currentProfile?.role || "viewer";
+      if (role === "viewer") return;
+
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .update({ status: "published", published_at: new Date().toISOString() })
+        .eq("id", currentWeek.id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error(error);
+        alert("Error publishing week.");
+        return;
+      }
+
+      currentWeek = data;
+      setStatusPill("published");
+      syncEditorButtons();
+      await loadWeeks();
+      alert("Week published.");
+    });
+
+  </script>
+</body>
+</html>
