@@ -194,6 +194,11 @@
         <input type="password" id="auth-password" placeholder="Password" required />
         <button type="submit" class="btn btn-primary">Sign in</button>
       </form>
+      <div class="mt-2">
+        <button id="btn-viewer" class="btn btn-sm">
+          View roster read-only
+        </button>
+      </div>
       <p id="auth-error" class="muted mt-2"></p>
     </div>
 
@@ -267,6 +272,7 @@
     let currentUser = null;
     let currentProfile = null;
     let currentWeek = null; // full row from roster_weeks
+    let isPublicViewer = false; // viewer mode flag
 
     // ===== AUTH =====
     const authCard = document.getElementById("auth-card");
@@ -277,6 +283,22 @@
     const authError = document.getElementById("auth-error");
     const userInfo = document.getElementById("user-info");
     const btnSignout = document.getElementById("btn-signout");
+    const btnViewer = document.getElementById("btn-viewer");
+
+    // Week controls
+    const newWeekTemplateSelect = document.getElementById("new-week-template");
+    const weeksTbody = document.getElementById("weeks-tbody");
+    const newWeekDate = document.getElementById("new-week-date");
+    const btnCreateWeek = document.getElementById("btn-create-week");
+
+    // Editor controls
+    const editorCard = document.getElementById("editor-card");
+    const editorTitle = document.getElementById("editor-title");
+    const editorSubtitle = document.getElementById("editor-subtitle");
+    const editorStatusPill = document.getElementById("editor-status-pill");
+    const rosterGrid = document.getElementById("roster-grid");
+    const btnSaveWeek = document.getElementById("btn-save-week");
+    const btnPublishWeek = document.getElementById("btn-publish-week");
 
     authForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -290,6 +312,7 @@
         return;
       }
       currentUser = data.user;
+      isPublicViewer = false;
       await loadProfile();
       await postLoginInit();
     });
@@ -299,10 +322,31 @@
       currentUser = null;
       currentProfile = null;
       currentWeek = null;
+      isPublicViewer = false;
       userInfo.textContent = "Not signed in";
       btnSignout.classList.add("hidden");
       authCard.classList.remove("hidden");
       appEl.classList.add("hidden");
+      editorCard.classList.add("hidden");
+    });
+
+    btnViewer.addEventListener("click", async (e) => {
+      e.preventDefault();
+      isPublicViewer = true;
+      currentUser = null;
+      currentProfile = { full_name: "Public viewer", role: "viewer" };
+
+      userInfo.textContent = "Public viewer • read-only";
+      btnSignout.classList.add("hidden");
+      authCard.classList.add("hidden");
+      appEl.classList.remove("hidden");
+
+      newWeekDate.disabled = true;
+      newWeekTemplateSelect.disabled = true;
+      btnCreateWeek.disabled = true;
+
+      await loadTemplates();
+      await loadWeeks();
     });
 
     async function loadProfile() {
@@ -319,13 +363,21 @@
     }
 
     async function postLoginInit() {
+      const role = currentProfile?.role || "viewer";
+
       userInfo.textContent = currentProfile
         ? `${currentProfile.full_name || currentUser.email} • ${currentProfile.role}`
         : currentUser.email;
 
+      isPublicViewer = false;
       btnSignout.classList.remove("hidden");
       authCard.classList.add("hidden");
       appEl.classList.remove("hidden");
+
+      newWeekDate.disabled = false;
+      newWeekTemplateSelect.disabled = false;
+      btnCreateWeek.disabled = !(role === "editor" || role === "admin");
+
       await loadTemplates();
       await loadWeeks();
     }
@@ -341,8 +393,6 @@
     })();
 
     // ===== TEMPLATES =====
-    const newWeekTemplateSelect = document.getElementById("new-week-template");
-
     async function loadTemplates() {
       const { data, error } = await supabase
         .from("roster_templates")
@@ -364,11 +414,13 @@
     }
 
     // ===== WEEK LIST =====
-    const weeksTbody = document.getElementById("weeks-tbody");
-    const newWeekDate = document.getElementById("new-week-date");
-    const btnCreateWeek = document.getElementById("btn-create-week");
-
     btnCreateWeek.addEventListener("click", async () => {
+      const role = currentProfile?.role || "viewer";
+      if (isPublicViewer || !(role === "editor" || role === "admin")) {
+        alert("You do not have permission to create weeks.");
+        return;
+      }
+
       const dateStr = newWeekDate.value;
       const templateId = newWeekTemplateSelect.value;
       if (!dateStr || !templateId) {
@@ -376,7 +428,6 @@
         return;
       }
 
-      // Load template structure
       const { data: tmpl, error: tmplErr } = await supabase
         .from("roster_templates")
         .select("id, name, code, structure")
@@ -470,14 +521,6 @@
     }
 
     // ===== ROSTER EDITOR =====
-    const editorCard = document.getElementById("editor-card");
-    const editorTitle = document.getElementById("editor-title");
-    const editorSubtitle = document.getElementById("editor-subtitle");
-    const editorStatusPill = document.getElementById("editor-status-pill");
-    const rosterGrid = document.getElementById("roster-grid");
-    const btnSaveWeek = document.getElementById("btn-save-week");
-    const btnPublishWeek = document.getElementById("btn-publish-week");
-
     async function openWeek(weekRow) {
       currentWeek = weekRow;
       editorCard.classList.remove("hidden");
@@ -500,6 +543,13 @@
       const role = currentProfile?.role || "viewer";
       const isEditor = role === "editor" || role === "admin";
       const isDraft = currentWeek?.status === "draft";
+
+      if (isPublicViewer || role === "viewer") {
+        btnSaveWeek.disabled = true;
+        btnPublishWeek.disabled = true;
+        btnPublishWeek.textContent = "Publish";
+        return;
+      }
 
       btnSaveWeek.disabled = !(isEditor && isDraft);
       btnPublishWeek.disabled = !isEditor;
@@ -529,6 +579,9 @@
         rosterGrid.innerHTML = "<p class='muted'>No sections defined in this roster.</p>";
         return;
       }
+
+      const role = currentProfile?.role || "viewer";
+      const readOnly = isPublicViewer || role === "viewer";
 
       data.sections.forEach(section => {
         const sectionDiv = document.createElement("div");
@@ -574,19 +627,31 @@
             input.dataset.rowIndex = rowIndex;
             input.dataset.field = key;
             input.className = classifyShift(input.value);
-            input.addEventListener("input", handleShiftChange);
+
+            if (readOnly) {
+              input.disabled = true;
+            } else {
+              input.addEventListener("input", handleShiftChange);
+            }
+
             td.appendChild(input);
             return td;
           }
 
-          // Name cell (edit name directly)
+          // Name cell
           const nameTd = document.createElement("td");
           const nameInput = document.createElement("input");
           nameInput.value = row.staff_name || "";
           nameInput.dataset.sectionId = section.id;
           nameInput.dataset.rowIndex = rowIndex;
           nameInput.dataset.field = "staff_name";
-          nameInput.addEventListener("input", handleNameChange);
+
+          if (readOnly) {
+            nameInput.disabled = true;
+          } else {
+            nameInput.addEventListener("input", handleNameChange);
+          }
+
           nameTd.appendChild(nameInput);
           tr.appendChild(nameTd);
 
@@ -602,7 +667,13 @@
           remarksInput.dataset.sectionId = section.id;
           remarksInput.dataset.rowIndex = rowIndex;
           remarksInput.dataset.field = "remarks";
-          remarksInput.addEventListener("input", handleRemarksChange);
+
+          if (readOnly) {
+            remarksInput.disabled = true;
+          } else {
+            remarksInput.addEventListener("input", handleRemarksChange);
+          }
+
           remarksTd.appendChild(remarksInput);
           tr.appendChild(remarksTd);
 
@@ -617,7 +688,7 @@
 
     function handleNameChange(e) {
       const role = currentProfile?.role || "viewer";
-      if (role === "viewer") return;
+      if (isPublicViewer || role === "viewer") return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -633,7 +704,7 @@
 
     function handleRemarksChange(e) {
       const role = currentProfile?.role || "viewer";
-      if (role === "viewer") return;
+      if (isPublicViewer || role === "viewer") return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -649,7 +720,7 @@
 
     function handleShiftChange(e) {
       const role = currentProfile?.role || "viewer";
-      if (role === "viewer") return;
+      if (isPublicViewer || role === "viewer") return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -664,14 +735,13 @@
       if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
       section.rows[rowIndex].shifts[field] = input.value;
 
-      // Update conditional class
       input.className = classifyShift(input.value);
     }
 
     btnSaveWeek.addEventListener("click", async () => {
       if (!currentWeek) return;
       const role = currentProfile?.role || "viewer";
-      if (role === "viewer") return;
+      if (isPublicViewer || role === "viewer") return;
 
       const { data, error } = await supabase
         .from("roster_weeks")
@@ -692,7 +762,7 @@
     btnPublishWeek.addEventListener("click", async () => {
       if (!currentWeek) return;
       const role = currentProfile?.role || "viewer";
-      if (role === "viewer") return;
+      if (isPublicViewer || role === "viewer") return;
 
       const { data, error } = await supabase
         .from("roster_weeks")
