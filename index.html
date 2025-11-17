@@ -1,4 +1,4 @@
-<!doctype html>
+<!doctype html> 
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -364,6 +364,12 @@
       border: 1px solid #cbd5e1;
     }
 
+    /* Highlight current day inputs with a soft blue ring (no background override) */
+    .current-day-ring {
+      box-shadow: 0 0 0 2px #38bdf8 inset;
+      border-radius: 0.4rem;
+    }
+
     /* Print styling for PDF export */
     @media print {
       body {
@@ -448,19 +454,20 @@
           </div>
         </div>
         <div class="mt-2">
-         <table id="weeks-table">
-  <thead>
-    <tr>
-      <th>Week ending</th>
-      <th>Label</th>
-      <th>Status</th>
-      <th>Template</th>
-      <th>Published at</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody id="weeks-tbody"></tbody>
-</table>
+          <table id="weeks-table">
+            <thead>
+              <tr>
+                <th>Week ending</th>
+                <th>Label</th>
+                <th>Status</th>
+                <th>Template</th>
+                <th>Coverage</th>
+                <th>Published at</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="weeks-tbody"></tbody>
+          </table>
         </div>
       </div>
 
@@ -552,7 +559,6 @@
             style="width:100%;"
           />
         </div>
-
 
         <!-- Coverage / legend panel -->
         <div id="coverage-banner" class="coverage-panel mt-1">
@@ -655,9 +661,9 @@
     const coverageSummary = document.getElementById("coverage-summary");
     const rosterFilterInput = document.getElementById("roster-filter");
 
-// Default analytics to collapsed on first load
-analyticsBody.classList.add("hidden");
-btnToggleAnalytics.textContent = "Show";
+    // Default analytics to collapsed on first load
+    analyticsBody.classList.add("hidden");
+    btnToggleAnalytics.textContent = "Show";
 
     // ===== AUTH =====
     authForm.addEventListener("submit", async (e) => {
@@ -831,7 +837,7 @@ btnToggleAnalytics.textContent = "Show";
     async function loadWeeks() {
       const { data, error } = await supabase
         .from("roster_weeks")
-        .select("id, week_ending, label, status, template_id, created_at, published_at, roster_templates(name, code)")
+        .select("id, week_ending, label, status, template_id, created_at, published_at, data, roster_templates(name, code)")
         .order("week_ending", { ascending: false });
 
       if (error) {
@@ -846,21 +852,29 @@ btnToggleAnalytics.textContent = "Show";
           ? `${w.roster_templates.code} – ${w.roster_templates.name}`
           : "N/A";
 
-       tr.innerHTML = `
-  <td>${formatUK(w.week_ending)}</td>
-  <td>${w.label || ""}</td>
-  <td>
-    <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
-      ${w.status}
-    </span>
-  </td>
-  <td>${tmplLabel}</td>
-  <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
-  <td>
-    <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
-  </td>
-`;
+        // Use existing metrics helper to see if this week has gaps
+        const metrics = computeWeekMetrics(w);
+        const hasGaps = metrics.uncovered > 0;
 
+        const coverageCell = hasGaps
+          ? `<span class="tag" style="border-color:#fbbf24;background:#fef9c3;color:#92400e;">⚠ Gaps</span>`
+          : `<span class="tag" style="border-color:#22c55e;background:#ecfdf3;color:#166534;">✅ Full</span>`;
+
+        tr.innerHTML = `
+          <td>${formatUK(w.week_ending)}</td>
+          <td>${w.label || ""}</td>
+          <td>
+            <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
+              ${w.status}
+            </span>
+          </td>
+          <td>${tmplLabel}</td>
+          <td>${coverageCell}</td>
+          <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
+          <td>
+            <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
+          </td>
+        `;
         weeksTbody.appendChild(tr);
       }
 
@@ -959,16 +973,57 @@ btnToggleAnalytics.textContent = "Show";
 
     function ensureUncovered(section) {
       if (!section.uncovered) {
-        section.uncovered = {
-          sun: "",
-          mon: "",
-          tue: "",
-          wed: "",
-          thu: "",
-          fri: "",
-          sat: "",
-        };
+        section.uncovered = {};
       }
+
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      days.forEach((day) => {
+        const current = section.uncovered[day];
+
+        // Backwards compatibility: old data was a simple string
+        if (typeof current === "string") {
+          section.uncovered[day] = {
+            s1: current,
+            s2: ""
+          };
+        } else if (!current || typeof current !== "object") {
+          section.uncovered[day] = {
+            s1: "",
+            s2: ""
+          };
+        } else {
+          // Make sure both slots exist
+          section.uncovered[day].s1 = section.uncovered[day].s1 || "";
+          section.uncovered[day].s2 = section.uncovered[day].s2 || "";
+        }
+      });
+    }
+
+    // Returns true if the current week-ending date includes today's date
+    function weekContainsToday(weekEndingStr) {
+      if (!weekEndingStr) return false;
+      const end = new Date(weekEndingStr);
+      if (isNaN(end)) return false;
+
+      const today = new Date();
+      const oneDay = 24 * 60 * 60 * 1000;
+
+      // How many days from today until week ending
+      const diffDays = Math.floor((end - today) / oneDay);
+
+      // Treat week as 7 days ending on 'week_ending'
+      return diffDays >= 0 && diffDays <= 6;
+    }
+
+    const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+    function isTodayKey(key) {
+      if (!key) return false;
+      if (!currentWeek || !weekContainsToday(currentWeek.week_ending)) return false;
+
+      const todayIndex = new Date().getDay(); // 0 = Sun ... 6 = Sat
+      return DAY_KEYS[todayIndex] === key;
     }
 
     // ===== ROSTER RENDERING =====
@@ -1031,22 +1086,36 @@ btnToggleAnalytics.textContent = "Show";
         const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
         days.forEach((day) => {
           const td = document.createElement("td");
-          const input = document.createElement("input");
-          input.value = section.uncovered?.[day] || "";
-          input.dataset.sectionId = section.id;
-          input.dataset.day = day;
-          input.className = "shift-input " + classifyShift(input.value);
 
-          const roleInner = currentProfile?.role || "viewer";
-          const readOnlyInner = isPublicViewer || roleInner === "viewer";
+          const dayObj = (section.uncovered && section.uncovered[day]) || { s1: "", s2: "" };
 
-          if (readOnlyInner) {
-            input.disabled = true;
-          } else {
-            input.addEventListener("input", handleUncoveredChange);
-          }
+          ["s1", "s2"].forEach((slot) => {
+            const input = document.createElement("input");
+            input.value = dayObj[slot] || "";
+            input.dataset.sectionId = section.id;
+            input.dataset.day = day;
+            input.dataset.slot = slot;        // which uncovered slot
+            input.className = "shift-input " + classifyShift(input.value);
+            input.style.display = "block";     // stack vertically
+            input.style.marginBottom = "2px";
 
-          td.appendChild(input);
+            // Add blue ring if this uncovered cell is for today's day
+            if (isTodayKey(day)) {
+              input.classList.add("current-day-ring");
+            }
+
+            const roleInner = currentProfile?.role || "viewer";
+            const readOnlyInner = isPublicViewer || roleInner === "viewer";
+
+            if (readOnlyInner) {
+              input.disabled = true;
+            } else {
+              input.addEventListener("input", handleUncoveredChange);
+            }
+
+            td.appendChild(input);
+          });
+
           uncoveredTr.appendChild(td);
         });
 
@@ -1071,6 +1140,11 @@ btnToggleAnalytics.textContent = "Show";
             input.dataset.rowIndex = rowIndex;
             input.dataset.field = key;
             input.className = "shift-input " + classifyShift(input.value);
+
+            // Add blue ring for today's column
+            if (isTodayKey(key)) {
+              input.classList.add("current-day-ring");
+            }
 
             const select = document.createElement("select");
             select.className = "shift-preset";
@@ -1121,21 +1195,21 @@ btnToggleAnalytics.textContent = "Show";
               });
             }
 
-          wrap.appendChild(input);
+            wrap.appendChild(input);
 
-if (!readOnlyInner) {
-  // Editors get the preset dropdown
-  wrap.appendChild(select);
-} else {
-  // Hide the preset in read-only mode
-  select.style.display = "none";
-}
+            if (!readOnlyInner) {
+              // Editors get the preset dropdown
+              wrap.appendChild(select);
+            } else {
+              // Hide the preset in read-only mode
+              select.style.display = "none";
+            }
 
-// Always append the RDW pill so active tags are visible in read-only
-wrap.appendChild(rdwBtn);
+            // Always append the RDW pill so active tags are visible in read-only
+            wrap.appendChild(rdwBtn);
 
-td.appendChild(wrap);
-return td;
+            td.appendChild(wrap);
+            return td;
           }
 
           const nameTd = document.createElement("td");
@@ -1181,7 +1255,8 @@ return td;
         sectionDiv.appendChild(table);
         rosterGrid.appendChild(sectionDiv);
       });
-// Re-apply any active per-week name filter
+
+      // Re-apply any active per-week name filter
       applyRosterFilter();
     }
 
@@ -1193,14 +1268,23 @@ return td;
       const input = e.target;
       const sectionId = input.dataset.sectionId;
       const day = input.dataset.day;
+      const slot = input.dataset.slot || "s1";   // default to s1 if missing
 
       const sections = currentWeek.data.sections || [];
       const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
       ensureUncovered(section);
-      section.uncovered[day] = input.value;
+      const dayObj = section.uncovered[day];
+      if (!dayObj) return;
+
+      dayObj[slot] = input.value;
       input.className = "shift-input " + classifyShift(input.value);
+
+      if (isTodayKey(day)) {
+        input.classList.add("current-day-ring");
+      }
+
       updateCoverageBanner();
     }
 
@@ -1254,6 +1338,11 @@ return td;
       section.rows[rowIndex].shifts[field] = input.value;
 
       input.className = "shift-input " + classifyShift(input.value);
+
+      if (isTodayKey(field)) {
+        input.classList.add("current-day-ring");
+      }
+
       updateCoverageBanner();
     }
 
@@ -1279,7 +1368,7 @@ return td;
       alert("Draft saved.");
     });
 
-       btnPublishWeek.addEventListener("click", async () => {
+    btnPublishWeek.addEventListener("click", async () => {
       if (!currentWeek) return;
       const role = currentProfile?.role || "viewer";
       if (isPublicViewer || role === "viewer") return;
@@ -1289,7 +1378,7 @@ return td;
         .update({
           status: "published",
           published_at: new Date().toISOString(),
-          data: currentWeek.data     // <-- also persist latest roster data
+          data: currentWeek.data     // also persist latest roster data
         })
         .eq("id", currentWeek.id)
         .select("*")
@@ -1309,7 +1398,6 @@ return td;
       await refreshAnalytics();
       alert("Week published.");
     });
-
 
     btnPrintWeek.addEventListener("click", () => {
       if (!currentWeek) {
@@ -1424,9 +1512,14 @@ return td;
           ensureUncovered(section);
 
           days.forEach((day) => {
-            const text = (section.uncovered?.[day] || "").trim();
-            if (text) {
-              weekUncovered += 1;
+            const u = section.uncovered?.[day];
+
+            if (typeof u === "string") {
+              // Legacy single value
+              if (u.trim()) weekUncovered += 1;
+            } else if (u && typeof u === "object") {
+              if ((u.s1 || "").trim()) weekUncovered += 1;
+              if ((u.s2 || "").trim()) weekUncovered += 1;
             }
           });
 
@@ -1541,6 +1634,7 @@ return td;
     }
 
     usageFilterInput.addEventListener("input", applyUsageFilter);
+
     // ===== PER-WEEK ROSTER FILTER =====
     function applyRosterFilter() {
       if (!rosterFilterInput) return;
@@ -1586,9 +1680,13 @@ return td;
 
         // Uncovered
         days.forEach((day) => {
-          const text = (section.uncovered?.[day] || "").trim();
-          if (text) {
-            stats.uncovered++;
+          const u = section.uncovered?.[day];
+
+          if (typeof u === "string") {
+            if (u.trim()) stats.uncovered += 1;
+          } else if (u && typeof u === "object") {
+            if ((u.s1 || "").trim()) stats.uncovered += 1;
+            if ((u.s2 || "").trim()) stats.uncovered += 1;
           }
         });
 
