@@ -1,4 +1,4 @@
-<!doctype html> 
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -245,6 +245,22 @@
       font-weight: 900;
     }
 
+    /* Spare-origin marker (originally SPARE in base roster) */
+    .spare-origin-cell {
+      position: relative;
+    }
+    .spare-origin-cell::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      bottom: 2px;
+      width: 4px;
+      border-radius: 999px;
+      background: #d86dcd; /* same as spare colour */
+      pointer-events: none;
+    }
+
     /* Tags and status pills */
     .tag {
       display: inline-flex;
@@ -297,7 +313,9 @@
     .hidden { display: none; }
 
     /* Alt row shading for per-person totals */
-    #analytics-usage-tbody tr:nth-child(even) {
+    #analytics-usage-tbody tr:nth-child(even),
+    #analytics-leave-tbody tr:nth-child(even),
+    #analytics-expiry-tbody tr:nth-child(even) {
       background: #e5e7eb;
     }
 
@@ -364,10 +382,38 @@
       border: 1px solid #cbd5e1;
     }
 
-    /* Highlight current day inputs with a soft blue ring (no background override) */
-    .current-day-ring {
-      box-shadow: 0 0 0 2px #38bdf8 inset;
-      border-radius: 0.4rem;
+    /* Leave allowance RAG pills */
+    .leave-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 3.2rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .leave-green {
+      background: #dcfce7;
+      border-color: #22c55e;
+      color: #166534;
+    }
+    .leave-amber {
+      background: #fef9c3;
+      border-color: #facc15;
+      color: #854d0e;
+    }
+    .leave-red {
+      background: #fee2e2;
+      border-color: #ef4444;
+      color: #991b1b;
+    }
+
+    /* Highlight current day column: soft blue ring around inputs */
+    .today-col input {
+      box-shadow: 0 0 0 2px #93c5fd;
+      border-color: #3b82f6;
     }
 
     /* Print styling for PDF export */
@@ -488,6 +534,7 @@
         </div>
 
         <div id="analytics-body">
+          <!-- Weekly trends -->
           <div class="mt-2">
             <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Weekly trends</h3>
             <p class="muted mb-1">One row per roster week in the selected calendar year.</p>
@@ -507,6 +554,7 @@
             </table>
           </div>
 
+          <!-- Per-person usage -->
           <div class="mt-3">
             <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Per-person usage</h3>
             <div class="flex-between mb-1">
@@ -531,6 +579,50 @@
                 </tr>
               </thead>
               <tbody id="analytics-usage-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Leave allowances -->
+          <div class="mt-3">
+            <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Leave allowances</h3>
+            <p class="muted mb-1">
+              Allowance vs usage per person (A/L &amp; C/L). C/L allowance includes LROP-earned days.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>A/L used</th>
+                  <th>A/L allowance</th>
+                  <th>A/L %</th>
+                  <th>C/L used</th>
+                  <th>C/L allowance<br/><span class="muted" style="font-size:0.7rem;">(base + earned)</span></th>
+                  <th>C/L %</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-leave-tbody"></tbody>
+            </table>
+            <div class="mt-1 flex-between">
+              <button id="btn-save-allowances" class="btn btn-sm">Save leave allowances</button>
+              <span id="leave-save-status" class="muted"></span>
+            </div>
+          </div>
+
+          <!-- Comp leave expiry watch -->
+          <div class="mt-3">
+            <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Comp leave expiry watch</h3>
+            <p class="muted mb-1">
+              LROP-earned C/L credits that will expire in the next 60 days (1-year validity from date earned).
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Credits expiring</th>
+                  <th>First expiry date</th>
+                </tr>
+              </thead>
+              <tbody id="analytics-expiry-tbody"></tbody>
             </table>
           </div>
         </div>
@@ -612,6 +704,14 @@
     let isPublicViewer = false;
 
     let lastUsageStats = [];
+    let currentAnalyticsYear = null;
+
+    // Leave allowances loaded from Supabase for currentAnalyticsYear
+    // Map: { [staff_name]: { al: number, clBase: number } }
+    let leaveAllowancesByName = {};
+
+    // Expiry horizon in days for comp leave watch
+    const COMP_EXPIRY_HORIZON_DAYS = 60;
 
     // ===== Date formatting helper (UK) =====
     function formatUK(dateStr) {
@@ -622,6 +722,33 @@
       const month = String(d.getMonth() + 1).padStart(2, "0");
       const year = d.getFullYear();
       return `${day}/${month}/${year}`;
+    }
+
+    function addDays(date, days) {
+      const d = new Date(date.getTime());
+      d.setDate(d.getDate() + days);
+      return d;
+    }
+
+    // Given week-ending date and day key, get actual Date.
+    // Assumes week_ending is SATURDAY.
+    function getDateForDay(weekEndingStr, dayKey) {
+      if (!weekEndingStr) return null;
+      const end = new Date(weekEndingStr);
+      if (isNaN(end)) return null;
+      const offsets = {
+        sun: -6,
+        mon: -5,
+        tue: -4,
+        wed: -3,
+        thu: -2,
+        fri: -1,
+        sat: 0
+      };
+      const offset = offsets[dayKey] ?? 0;
+      const d = new Date(end.getTime());
+      d.setDate(d.getDate() + offset);
+      return d;
     }
 
     // ===== DOM HOOKS =====
@@ -655,7 +782,11 @@
     const analyticsBody = document.getElementById("analytics-body");
     const analyticsWeeklyTbody = document.getElementById("analytics-weekly-tbody");
     const analyticsUsageTbody = document.getElementById("analytics-usage-tbody");
+    const analyticsLeaveTbody = document.getElementById("analytics-leave-tbody");
+    const analyticsExpiryTbody = document.getElementById("analytics-expiry-tbody");
     const usageFilterInput = document.getElementById("usage-filter");
+    const btnSaveAllowances = document.getElementById("btn-save-allowances");
+    const leaveSaveStatus = document.getElementById("leave-save-status");
 
     const coveragePill = document.getElementById("coverage-pill");
     const coverageSummary = document.getElementById("coverage-summary");
@@ -715,6 +846,7 @@
       await loadWeeks();
       await loadAnalyticsYears();
       await refreshAnalytics();
+      await refreshExpiryWatch();
     });
 
     async function loadProfile() {
@@ -748,6 +880,7 @@
       await loadWeeks();
       await loadAnalyticsYears();
       await refreshAnalytics();
+      await refreshExpiryWatch();
     }
 
     (async function init() {
@@ -831,6 +964,7 @@
       await openWeek(data);
       await loadAnalyticsYears();
       await refreshAnalytics();
+      await refreshExpiryWatch();
     });
 
     // ===== WEEK LIST =====
@@ -852,7 +986,7 @@
           ? `${w.roster_templates.code} – ${w.roster_templates.name}`
           : "N/A";
 
-        // Use existing metrics helper to see if this week has gaps
+        // Use metrics helper to see if this week has gaps
         const metrics = computeWeekMetrics(w);
         const hasGaps = metrics.uncovered > 0;
 
@@ -896,8 +1030,31 @@
       });
     }
 
+    // Mark which cells were originally SPARE in the base roster
+    function ensureSpareOrigin(struct) {
+      if (!struct || !Array.isArray(struct.sections)) return;
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      struct.sections.forEach((section) => {
+        (section.rows || []).forEach((row) => {
+          if (!row.spare_origin) row.spare_origin = {};
+          days.forEach((day) => {
+            // If already set, leave it; we only infer when missing
+            if (typeof row.spare_origin[day] === "boolean") return;
+            const v = (row.shifts && row.shifts[day])
+              ? String(row.shifts[day]).toUpperCase()
+              : "";
+            row.spare_origin[day] = v.includes("SPARE");
+          });
+        });
+      });
+    }
+
     async function openWeek(weekRow) {
       currentWeek = weekRow;
+      // Derive / ensure spare-origin markers for this week's data
+      ensureSpareOrigin(currentWeek.data);
+
       editorCard.classList.remove("hidden");
       editorTitle.textContent = `Week ending ${formatUK(weekRow.week_ending)}`;
       editorSubtitle.textContent = weekRow.label || "";
@@ -971,6 +1128,7 @@
       return classes.join(" ");
     }
 
+    // Ensure uncovered structure supports two slots (s1, s2)
     function ensureUncovered(section) {
       if (!section.uncovered) {
         section.uncovered = {};
@@ -993,7 +1151,6 @@
             s2: ""
           };
         } else {
-          // Make sure both slots exist
           section.uncovered[day].s1 = section.uncovered[day].s1 || "";
           section.uncovered[day].s2 = section.uncovered[day].s2 || "";
         }
@@ -1009,21 +1166,10 @@
       const today = new Date();
       const oneDay = 24 * 60 * 60 * 1000;
 
-      // How many days from today until week ending
       const diffDays = Math.floor((end - today) / oneDay);
 
       // Treat week as 7 days ending on 'week_ending'
       return diffDays >= 0 && diffDays <= 6;
-    }
-
-    const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-    function isTodayKey(key) {
-      if (!key) return false;
-      if (!currentWeek || !weekContainsToday(currentWeek.week_ending)) return false;
-
-      const todayIndex = new Date().getDay(); // 0 = Sun ... 6 = Sat
-      return DAY_KEYS[todayIndex] === key;
     }
 
     // ===== ROSTER RENDERING =====
@@ -1086,7 +1232,6 @@
         const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
         days.forEach((day) => {
           const td = document.createElement("td");
-
           const dayObj = (section.uncovered && section.uncovered[day]) || { s1: "", s2: "" };
 
           ["s1", "s2"].forEach((slot) => {
@@ -1094,15 +1239,10 @@
             input.value = dayObj[slot] || "";
             input.dataset.sectionId = section.id;
             input.dataset.day = day;
-            input.dataset.slot = slot;        // which uncovered slot
+            input.dataset.slot = slot;
             input.className = "shift-input " + classifyShift(input.value);
-            input.style.display = "block";     // stack vertically
+            input.style.display = "block";
             input.style.marginBottom = "2px";
-
-            // Add blue ring if this uncovered cell is for today's day
-            if (isTodayKey(day)) {
-              input.classList.add("current-day-ring");
-            }
 
             const roleInner = currentProfile?.role || "viewer";
             const readOnlyInner = isPublicViewer || roleInner === "viewer";
@@ -1131,6 +1271,12 @@
 
           function makeCell(key) {
             const td = document.createElement("td");
+
+            // Mark any cell that was originally SPARE in the base roster
+            if (row.spare_origin && row.spare_origin[key]) {
+              td.classList.add("spare-origin-cell");
+            }
+
             const wrap = document.createElement("div");
             wrap.className = "shift-cell-wrap";
 
@@ -1140,11 +1286,6 @@
             input.dataset.rowIndex = rowIndex;
             input.dataset.field = key;
             input.className = "shift-input " + classifyShift(input.value);
-
-            // Add blue ring for today's column
-            if (isTodayKey(key)) {
-              input.classList.add("current-day-ring");
-            }
 
             const select = document.createElement("select");
             select.className = "shift-preset";
@@ -1198,14 +1339,12 @@
             wrap.appendChild(input);
 
             if (!readOnlyInner) {
-              // Editors get the preset dropdown
               wrap.appendChild(select);
             } else {
-              // Hide the preset in read-only mode
               select.style.display = "none";
             }
 
-            // Always append the RDW pill so active tags are visible in read-only
+            // Always append RDW pill so tags are visible even read-only
             wrap.appendChild(rdwBtn);
 
             td.appendChild(wrap);
@@ -1252,6 +1391,27 @@
         });
 
         table.appendChild(tbody);
+
+        // Highlight current day column if this roster week contains today's date
+        if (currentWeek && weekContainsToday(currentWeek.week_ending)) {
+          const today = new Date();
+          const jsDay = today.getDay(); // 0 = Sun ... 6 = Sat
+          const dayIndex = jsDay;       // 0-based, matching [Sun..Sat] after "Name" col
+
+          const headerCells = thead.querySelectorAll("th");
+          if (headerCells[dayIndex + 1]) {
+            headerCells[dayIndex + 1].classList.add("today-col");
+          }
+
+          const bodyRows = tbody.querySelectorAll("tr");
+          bodyRows.forEach((row) => {
+            const cells = row.querySelectorAll("td");
+            if (cells[dayIndex + 1]) {
+              cells[dayIndex + 1].classList.add("today-col");
+            }
+          });
+        }
+
         sectionDiv.appendChild(table);
         rosterGrid.appendChild(sectionDiv);
       });
@@ -1268,7 +1428,7 @@
       const input = e.target;
       const sectionId = input.dataset.sectionId;
       const day = input.dataset.day;
-      const slot = input.dataset.slot || "s1";   // default to s1 if missing
+      const slot = input.dataset.slot || "s1";
 
       const sections = currentWeek.data.sections || [];
       const section = sections.find((s) => s.id === sectionId);
@@ -1280,11 +1440,6 @@
 
       dayObj[slot] = input.value;
       input.className = "shift-input " + classifyShift(input.value);
-
-      if (isTodayKey(day)) {
-        input.classList.add("current-day-ring");
-      }
-
       updateCoverageBanner();
     }
 
@@ -1337,12 +1492,10 @@
       if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
       section.rows[rowIndex].shifts[field] = input.value;
 
+      // Note: we deliberately do NOT touch row.spare_origin[field] here,
+      // so the "original spare" marker stays even when overwritten.
+
       input.className = "shift-input " + classifyShift(input.value);
-
-      if (isTodayKey(field)) {
-        input.classList.add("current-day-ring");
-      }
-
       updateCoverageBanner();
     }
 
@@ -1378,7 +1531,7 @@
         .update({
           status: "published",
           published_at: new Date().toISOString(),
-          data: currentWeek.data     // also persist latest roster data
+          data: currentWeek.data
         })
         .eq("id", currentWeek.id)
         .select("*")
@@ -1396,6 +1549,7 @@
       await loadWeeks();
       await loadAnalyticsYears();
       await refreshAnalytics();
+      await refreshExpiryWatch();
       alert("Week published.");
     });
 
@@ -1456,6 +1610,7 @@
 
     btnRefreshAnalytics.addEventListener("click", () => {
       refreshAnalytics();
+      refreshExpiryWatch();
     });
 
     btnToggleAnalytics.addEventListener("click", () => {
@@ -1463,13 +1618,40 @@
       btnToggleAnalytics.textContent = collapsed ? "Show" : "Hide";
     });
 
+    async function loadLeaveAllowances(year) {
+      leaveAllowancesByName = {};
+      currentAnalyticsYear = year;
+
+      const { data, error } = await supabase
+        .from("leave_allowances")
+        .select("id, staff_name, year, al_allowance, cl_base_allowance")
+        .eq("year", year);
+
+      if (error) {
+        console.error("loadLeaveAllowances error", error);
+        return;
+      }
+
+      (data || []).forEach((row) => {
+        const name = row.staff_name.trim();
+        leaveAllowancesByName[name] = {
+          id: row.id,
+          al: row.al_allowance || 0,
+          clBase: row.cl_base_allowance || 0
+        };
+      });
+    }
+
     async function refreshAnalytics() {
       const year = analyticsYearSelect.value;
       if (!year) {
         analyticsWeeklyTbody.innerHTML = "";
         analyticsUsageTbody.innerHTML = "";
+        analyticsLeaveTbody.innerHTML = "";
         return;
       }
+
+      await loadLeaveAllowances(Number(year));
 
       const start = `${year}-01-01`;
       const end = `${year}-12-31`;
@@ -1486,13 +1668,14 @@
         return;
       }
 
-      const { weeklyStats, usageStats } = computeAnalyticsFromWeeks(data || []);
+      const { weeklyStats, usageStats, leaveStats } = computeAnalyticsFromWeeks(data || [], leaveAllowancesByName);
       renderWeeklyAnalytics(weeklyStats);
       lastUsageStats = usageStats;
       applyUsageFilter();
+      renderLeaveAnalytics(leaveStats);
     }
 
-    function computeAnalyticsFromWeeks(weeks) {
+    function computeAnalyticsFromWeeks(weeks, allowancesMap) {
       const weeklyStats = [];
       const usageMap = {};
       const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -1511,11 +1694,11 @@
         struct.sections.forEach((section) => {
           ensureUncovered(section);
 
+          // Uncovered
           days.forEach((day) => {
             const u = section.uncovered?.[day];
 
             if (typeof u === "string") {
-              // Legacy single value
               if (u.trim()) weekUncovered += 1;
             } else if (u && typeof u === "object") {
               if ((u.s1 || "").trim()) weekUncovered += 1;
@@ -1523,10 +1706,18 @@
             }
           });
 
+          // Staff rows
           (section.rows || []).forEach((row) => {
             const staffName = (row.staff_name || "").trim();
             if (staffName && !usageMap[staffName]) {
-              usageMap[staffName] = { name: staffName, al: 0, cl: 0, rdwTotal: 0, rdwSun: 0 };
+              usageMap[staffName] = {
+                name: staffName,
+                al: 0,
+                cl: 0,
+                rdwTotal: 0,
+                rdwSun: 0,
+                lropEarned: [] // for expiry / dynamic CL
+              };
             }
 
             days.forEach((day) => {
@@ -1537,6 +1728,9 @@
               const hasAL = v.includes("A/L");
               const hasCL = v.includes("C/L");
               const hasSick = v.includes("SICK") || v.includes("S/L");
+              const hasLROP = v.includes("LROP");
+
+              const dayDate = getDateForDay(w.week_ending, day);
 
               if (hasAL) {
                 weekAL++;
@@ -1548,6 +1742,11 @@
               }
               if (hasSick) {
                 weekSick++;
+              }
+
+              // LROP generates a comp credit (1 day)
+              if (hasLROP && staffName && dayDate) {
+                usageMap[staffName].lropEarned.push(dayDate);
               }
 
               const isRDW = row.rdw && row.rdw[day];
@@ -1582,7 +1781,32 @@
       const usageStats = Object.values(usageMap).filter((u) => u.name);
       usageStats.sort((a, b) => a.name.localeCompare(b.name));
 
-      return { weeklyStats, usageStats };
+      // Build leave rows: used vs allowance (+ LROP-earned C/L, ignoring expiry for RAG)
+      const leaveStats = usageStats.map((u) => {
+        const base = allowancesMap[u.name] || { al: 0, clBase: 0 };
+        const alAllowance = base.al || 0;
+        const earnedCl = u.lropEarned.length || 0;
+        const clAllowance = (base.clBase || 0) + earnedCl;
+
+        const alUsed = u.al;
+        const clUsed = u.cl;
+
+        const alPct = alAllowance > 0 ? Math.round((alUsed / alAllowance) * 100) : null;
+        const clPct = clAllowance > 0 ? Math.round((clUsed / clAllowance) * 100) : null;
+
+        return {
+          name: u.name,
+          alUsed,
+          alAllowance,
+          alPct,
+          clUsed,
+          clAllowance,
+          clPct,
+          earnedCl
+        };
+      });
+
+      return { weeklyStats, usageStats, leaveStats };
     }
 
     function renderWeeklyAnalytics(rows) {
@@ -1620,6 +1844,149 @@
         analyticsUsageTbody.appendChild(tr);
       });
     }
+
+    function leaveRagClass(pct) {
+      if (pct === null || pct === undefined) return "";
+      if (pct > 90) return "leave-red";
+      if (pct >= 70) return "leave-amber";
+      return "leave-green";
+    }
+
+    function renderLeaveAnalytics(rows) {
+      analyticsLeaveTbody.innerHTML = "";
+      if (!rows || !rows.length) return;
+
+      const role = currentProfile?.role || "viewer";
+      const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
+
+      rows.forEach((r) => {
+        const alClass = leaveRagClass(r.alPct);
+        const clClass = leaveRagClass(r.clPct);
+
+        const tr = document.createElement("tr");
+
+        const alAllowance = r.alAllowance || 0;
+        const clAllowance = r.clAllowance || 0;
+
+        tr.innerHTML = `
+          <td style="text-align:left;">${r.name}</td>
+          <td>${r.alUsed}</td>
+          <td></td>
+          <td></td>
+          <td>${r.clUsed}</td>
+          <td></td>
+          <td></td>
+        `;
+
+        const tds = tr.querySelectorAll("td");
+
+        // A/L allowance (editable for editors)
+        const alInput = document.createElement("input");
+        alInput.type = "number";
+        alInput.min = "0";
+        alInput.value = alAllowance;
+        alInput.style.width = "4rem";
+        alInput.dataset.type = "al-allowance";
+        alInput.dataset.name = r.name;
+        if (!isEditor) alInput.disabled = true;
+        tds[2].appendChild(alInput);
+
+        // A/L %
+        if (r.alPct === null) {
+          tds[3].innerHTML = `<span class="muted" style="font-size:0.7rem;">n/a</span>`;
+        } else {
+          const span = document.createElement("span");
+          span.className = `leave-pill ${alClass}`;
+          span.textContent = `${r.alPct}%`;
+          tds[3].appendChild(span);
+        }
+
+        // C/L allowance (editable total: base + earned)
+        const clInput = document.createElement("input");
+        clInput.type = "number";
+        clInput.min = "0";
+        clInput.value = clAllowance;
+        clInput.style.width = "4rem";
+        clInput.dataset.type = "cl-allowance";
+        clInput.dataset.name = r.name;
+        clInput.dataset.earnedCl = String(r.earnedCl || 0);
+        if (!isEditor) clInput.disabled = true;
+        tds[5].appendChild(clInput);
+
+        // C/L %
+        if (r.clPct === null) {
+          tds[6].innerHTML = `<span class="muted" style="font-size:0.7rem;">n/a</span>`;
+        } else {
+          const span2 = document.createElement("span");
+          span2.className = `leave-pill ${clClass}`;
+          span2.textContent = `${r.clPct}%`;
+          tds[6].appendChild(span2);
+        }
+
+        analyticsLeaveTbody.appendChild(tr);
+      });
+    }
+
+    // Save leave allowances (A/L and base C/L) back to Supabase
+    btnSaveAllowances.addEventListener("click", async () => {
+      const role = currentProfile?.role || "viewer";
+      const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
+      if (!isEditor) {
+        alert("You do not have permission to edit allowances.");
+        return;
+      }
+
+      if (!currentAnalyticsYear) {
+        alert("No analytics year selected.");
+        return;
+      }
+
+      const rows = analyticsLeaveTbody.querySelectorAll("tr");
+      const payloads = [];
+
+      rows.forEach((tr) => {
+        const nameCell = tr.querySelector("td:first-child");
+        if (!nameCell) return;
+        const name = nameCell.textContent.trim();
+        if (!name) return;
+
+        const alInput = tr.querySelector('input[data-type="al-allowance"]');
+        const clInput = tr.querySelector('input[data-type="cl-allowance"]');
+
+        const alAllowance = alInput ? Number(alInput.value || "0") : 0;
+        const clTotalAllowance = clInput ? Number(clInput.value || "0") : 0;
+        const earnedCl = clInput ? Number(clInput.dataset.earnedCl || "0") : 0;
+
+        // base C/L = total - earned (never below 0)
+        let clBase = clTotalAllowance - earnedCl;
+        if (clBase < 0) clBase = 0;
+
+        payloads.push({
+          staff_name: name,
+          year: Number(currentAnalyticsYear),
+          al_allowance: alAllowance,
+          cl_base_allowance: clBase
+        });
+      });
+
+      if (!payloads.length) return;
+
+      leaveSaveStatus.textContent = "Saving…";
+
+      const { error } = await supabase
+        .from("leave_allowances")
+        .upsert(payloads, { onConflict: "staff_name,year" });
+
+      if (error) {
+        console.error("save allowances error", error);
+        leaveSaveStatus.textContent = "Error saving allowances.";
+        return;
+      }
+
+      leaveSaveStatus.textContent = "Allowances saved.";
+      // Reload to recalc RAGs based on new allowances
+      await refreshAnalytics();
+    });
 
     function applyUsageFilter() {
       const term = (usageFilterInput.value || "").trim().toLowerCase();
@@ -1749,6 +2116,139 @@
         `Uncovered: ${stats.uncovered} • ` +
         `A/L: ${stats.al} • C/L: ${stats.cl} • Sick: ${stats.sick} • ` +
         `RDW: ${stats.rdwTotal} (Sun ${stats.rdwSun})`;
+    }
+
+    // ===== COMP LEAVE EXPIRY WATCH =====
+    async function refreshExpiryWatch() {
+      analyticsExpiryTbody.innerHTML = "";
+
+      const today = new Date();
+      const oneYearAgo = addDays(today, -365);
+
+      const { data, error } = await supabase
+        .from("roster_weeks")
+        .select("id, week_ending, data")
+        .gte("week_ending", oneYearAgo.toISOString().slice(0, 10))
+        .lte("week_ending", today.toISOString().slice(0, 10))
+        .order("week_ending", { ascending: true });
+
+      if (error) {
+        console.error("refreshExpiryWatch error", error);
+        return;
+      }
+
+      const expiryStats = computeExpiryFromWeeks(data || []);
+      renderExpiryAnalytics(expiryStats);
+    }
+
+    function computeExpiryFromWeeks(weeks) {
+      const usageMap = {};
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      weeks.forEach((w) => {
+        const struct = w.data;
+        if (!struct || !Array.isArray(struct.sections)) return;
+
+        struct.sections.forEach((section) => {
+          (section.rows || []).forEach((row) => {
+            const staffName = (row.staff_name || "").trim();
+            if (!staffName) return;
+
+            if (!usageMap[staffName]) {
+              usageMap[staffName] = {
+                name: staffName,
+                lropEarned: [],
+                clUsedCount: 0
+              };
+            }
+
+            days.forEach((day) => {
+              const shift = row.shifts?.[day];
+              const v = (shift || "").toUpperCase();
+              if (!v) return;
+
+              const hasCL = v.includes("C/L");
+              const hasLROP = v.includes("LROP");
+
+              const dayDate = getDateForDay(w.week_ending, day);
+
+              if (hasCL) {
+                usageMap[staffName].clUsedCount++;
+              }
+              if (hasLROP && dayDate) {
+                usageMap[staffName].lropEarned.push(dayDate);
+              }
+            });
+          });
+        });
+      });
+
+      const today = new Date();
+      const horizon = addDays(today, COMP_EXPIRY_HORIZON_DAYS);
+
+      const result = [];
+
+      Object.values(usageMap).forEach((u) => {
+        const credits = [...u.lropEarned].sort((a, b) => a - b);
+        let remainingCredits = credits.map((d) => ({ date: d, consumed: false }));
+
+        // Consume credits FIFO for each C/L used
+        let used = u.clUsedCount || 0;
+        for (let i = 0; i < remainingCredits.length && used > 0; i++) {
+          if (!remainingCredits[i].consumed) {
+            remainingCredits[i].consumed = true;
+            used--;
+          }
+        }
+
+        // Now check unconsumed credits for upcoming expiry
+        let expiringCount = 0;
+        let firstExpiry = null;
+
+        remainingCredits.forEach((c) => {
+          if (c.consumed) return;
+          const expiry = new Date(c.date.getTime());
+          expiry.setFullYear(expiry.getFullYear() + 1);
+
+          if (expiry >= today && expiry <= horizon) {
+            expiringCount++;
+            if (!firstExpiry || expiry < firstExpiry) {
+              firstExpiry = expiry;
+            }
+          }
+        });
+
+        if (expiringCount > 0) {
+          result.push({
+            name: u.name,
+            expiringCount,
+            firstExpiry
+          });
+        }
+      });
+
+      result.sort((a, b) => a.firstExpiry - b.firstExpiry || a.name.localeCompare(b.name));
+      return result;
+    }
+
+    function renderExpiryAnalytics(rows) {
+      analyticsExpiryTbody.innerHTML = "";
+      if (!rows.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="3" class="muted">No comp leave credits nearing expiry.</td>`;
+        analyticsExpiryTbody.appendChild(tr);
+        return;
+      }
+
+      rows.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td style="text-align:left;">${r.name}</td>
+          <td>${r.expiringCount}</td>
+          <td>${formatUK(r.firstExpiry.toISOString())}</td>
+        `;
+        analyticsExpiryTbody.appendChild(tr);
+      });
     }
   </script>
 </body>
