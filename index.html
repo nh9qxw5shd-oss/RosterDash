@@ -586,20 +586,19 @@
           <div class="mt-3">
             <h3 style="margin:0 0 0.25rem;font-size:0.9rem;color:#0f172a;">Leave allowances</h3>
             <p class="muted mb-1">
-              Allowance vs usage per person (A/L &amp; C/L). C/L allowance includes LROP-earned days.
-            </p>
+  A/L uses a fixed annual allowance. C/L allowance is a live bank of usable LROP-earned days (12-month validity, minus days already taken).
+</p>
             <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>A/L used</th>
-                  <th>A/L allowance</th>
-                  <th>A/L %</th>
-                  <th>C/L used</th>
-                  <th>C/L allowance<br/><span class="muted" style="font-size:0.7rem;">(base + earned)</span></th>
-                  <th>C/L %</th>
-                </tr>
-              </thead>
+             <thead>
+  <tr>
+    <th>Name</th>
+    <th>A/L used</th>
+    <th>A/L allowance</th>
+    <th>A/L %</th>
+    <th>C/L used<br/><span class="muted" style="font-size:0.7rem;">(used in last 12 months)</span></th>
+<th>C/L usable balance<br/><span class="muted" style="font-size:0.7rem;">(valid, unspent credits)</span></th>
+  </tr>
+</thead>
               <tbody id="analytics-leave-tbody"></tbody>
             </table>
             <div class="mt-1 flex-between">
@@ -689,1376 +688,989 @@
     </div>
   </div>
 
-  <script>
-    // ===== CONFIG =====
-    const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
-    const SUPABASE_ANON_KEY =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
+   <script>
+  // ===== CONFIG =====
+  const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
+  const SUPABASE_ANON_KEY =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
 
-    const { createClient } = window.supabase;
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { createClient } = window.supabase;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let currentUser = null;
-    let currentProfile = null;
-    let currentWeek = null;
-    let isPublicViewer = false;
+  let currentUser = null;
+  let currentProfile = null;
+  let currentWeek = null;
+  let isPublicViewer = false;
 
-    let lastUsageStats = [];
-    let currentAnalyticsYear = null;
+  let lastUsageStats = [];
+  let currentAnalyticsYear = null;
 
-    // Leave allowances loaded from Supabase for currentAnalyticsYear
-    // Map: { [staff_name]: { al: number, clBase: number } }
-    let leaveAllowancesByName = {};
+  // Leave allowances loaded from Supabase for currentAnalyticsYear
+  // Map: { [staff_name]: { al: number } }
+  let leaveAllowancesByName = {};
 
-    // Expiry horizon in days for comp leave watch
-    const COMP_EXPIRY_HORIZON_DAYS = 60;
+  // Expiry horizon in days for comp leave watch
+  const COMP_EXPIRY_HORIZON_DAYS = 60;
 
-    // ===== Date formatting helper (UK) =====
-    function formatUK(dateStr) {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      if (isNaN(d)) return dateStr;
-      const day = String(d.getDate()).padStart(2, "0");
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
+  // ===== Date helpers =====
+  function formatUK(dateStr) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  function addDays(date, days) {
+    const d = new Date(date.getTime());
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  // Given week-ending date and day key, get actual Date.
+  // Assumes week_ending is SATURDAY.
+  function getDateForDay(weekEndingStr, dayKey) {
+    if (!weekEndingStr) return null;
+    const end = new Date(weekEndingStr);
+    if (isNaN(end)) return null;
+    const offsets = {
+      sun: -6,
+      mon: -5,
+      tue: -4,
+      wed: -3,
+      thu: -2,
+      fri: -1,
+      sat: 0
+    };
+    const offset = offsets[dayKey] ?? 0;
+    const d = new Date(end.getTime());
+    d.setDate(d.getDate() + offset);
+    return d;
+  }
+
+  // ===== DOM HOOKS =====
+  const authCard = document.getElementById("auth-card");
+  const appEl = document.getElementById("app");
+  const authForm = document.getElementById("auth-form");
+  const authEmail = document.getElementById("auth-email");
+  const authPassword = document.getElementById("auth-password");
+  const authError = document.getElementById("auth-error");
+  const userInfo = document.getElementById("user-info");
+  const btnSignout = document.getElementById("btn-signout");
+  const btnViewer = document.getElementById("btn-viewer");
+
+  const newWeekTemplateSelect = document.getElementById("new-week-template");
+  const weeksTbody = document.getElementById("weeks-tbody");
+  const newWeekDate = document.getElementById("new-week-date");
+  const btnCreateWeek = document.getElementById("btn-create-week");
+
+  const editorCard = document.getElementById("editor-card");
+  const editorTitle = document.getElementById("editor-title");
+  const editorSubtitle = document.getElementById("editor-subtitle");
+  const editorStatusPill = document.getElementById("editor-status-pill");
+  const rosterGrid = document.getElementById("roster-grid");
+  const btnSaveWeek = document.getElementById("btn-save-week");
+  const btnPublishWeek = document.getElementById("btn-publish-week");
+  const btnPrintWeek = document.getElementById("btn-print-week");
+
+  const analyticsYearSelect = document.getElementById("analytics-year");
+  const btnRefreshAnalytics = document.getElementById("btn-refresh-analytics");
+  const btnToggleAnalytics = document.getElementById("btn-toggle-analytics");
+  const analyticsBody = document.getElementById("analytics-body");
+  const analyticsWeeklyTbody = document.getElementById("analytics-weekly-tbody");
+  const analyticsUsageTbody = document.getElementById("analytics-usage-tbody");
+  const analyticsLeaveTbody = document.getElementById("analytics-leave-tbody");
+  const analyticsExpiryTbody = document.getElementById("analytics-expiry-tbody");
+  const usageFilterInput = document.getElementById("usage-filter");
+  const btnSaveAllowances = document.getElementById("btn-save-allowances");
+  const leaveSaveStatus = document.getElementById("leave-save-status");
+
+  const coveragePill = document.getElementById("coverage-pill");
+  const coverageSummary = document.getElementById("coverage-summary");
+  const rosterFilterInput = document.getElementById("roster-filter");
+
+  // Default analytics to collapsed on first load
+  analyticsBody.classList.add("hidden");
+  btnToggleAnalytics.textContent = "Show";
+
+  // ===== AUTH =====
+  authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    authError.textContent = "";
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      authError.textContent = error.message;
+      return;
     }
+    currentUser = data.user;
+    isPublicViewer = false;
+    await loadProfile();
+    await postLoginInit();
+  });
 
-    function addDays(date, days) {
-      const d = new Date(date.getTime());
-      d.setDate(d.getDate() + days);
-      return d;
-    }
+  btnSignout.addEventListener("click", async () => {
+    await supabase.auth.signOut();
+    currentUser = null;
+    currentProfile = null;
+    currentWeek = null;
+    isPublicViewer = false;
+    userInfo.textContent = "Not signed in";
+    btnSignout.classList.add("hidden");
+    authCard.classList.remove("hidden");
+    appEl.classList.add("hidden");
+    editorCard.classList.add("hidden");
+  });
 
-    // Given week-ending date and day key, get actual Date.
-    // Assumes week_ending is SATURDAY.
-    function getDateForDay(weekEndingStr, dayKey) {
-      if (!weekEndingStr) return null;
-      const end = new Date(weekEndingStr);
-      if (isNaN(end)) return null;
-      const offsets = {
-        sun: -6,
-        mon: -5,
-        tue: -4,
-        wed: -3,
-        thu: -2,
-        fri: -1,
-        sat: 0
-      };
-      const offset = offsets[dayKey] ?? 0;
-      const d = new Date(end.getTime());
-      d.setDate(d.getDate() + offset);
-      return d;
-    }
+  btnViewer.addEventListener("click", async (e) => {
+    e.preventDefault();
+    isPublicViewer = true;
+    currentUser = null;
+    currentProfile = { full_name: "Public viewer", role: "viewer" };
 
-    // ===== DOM HOOKS =====
-    const authCard = document.getElementById("auth-card");
-    const appEl = document.getElementById("app");
-    const authForm = document.getElementById("auth-form");
-    const authEmail = document.getElementById("auth-email");
-    const authPassword = document.getElementById("auth-password");
-    const authError = document.getElementById("auth-error");
-    const userInfo = document.getElementById("user-info");
-    const btnSignout = document.getElementById("btn-signout");
-    const btnViewer = document.getElementById("btn-viewer");
+    userInfo.textContent = "Public viewer • read-only";
+    btnSignout.classList.add("hidden");
+    authCard.classList.add("hidden");
+    appEl.classList.remove("hidden");
 
-    const newWeekTemplateSelect = document.getElementById("new-week-template");
-    const weeksTbody = document.getElementById("weeks-tbody");
-    const newWeekDate = document.getElementById("new-week-date");
-    const btnCreateWeek = document.getElementById("btn-create-week");
+    newWeekDate.disabled = true;
+    newWeekTemplateSelect.disabled = true;
+    btnCreateWeek.disabled = true;
 
-    const editorCard = document.getElementById("editor-card");
-    const editorTitle = document.getElementById("editor-title");
-    const editorSubtitle = document.getElementById("editor-subtitle");
-    const editorStatusPill = document.getElementById("editor-status-pill");
-    const rosterGrid = document.getElementById("roster-grid");
-    const btnSaveWeek = document.getElementById("btn-save-week");
-    const btnPublishWeek = document.getElementById("btn-publish-week");
-    const btnPrintWeek = document.getElementById("btn-print-week");
+    await loadTemplates();
+    await loadWeeks();
+    await loadAnalyticsYears();
+    await refreshAnalytics();
+    await refreshExpiryWatch();
+  });
 
-    const analyticsYearSelect = document.getElementById("analytics-year");
-    const btnRefreshAnalytics = document.getElementById("btn-refresh-analytics");
-    const btnToggleAnalytics = document.getElementById("btn-toggle-analytics");
-    const analyticsBody = document.getElementById("analytics-body");
-    const analyticsWeeklyTbody = document.getElementById("analytics-weekly-tbody");
-    const analyticsUsageTbody = document.getElementById("analytics-usage-tbody");
-    const analyticsLeaveTbody = document.getElementById("analytics-leave-tbody");
-    const analyticsExpiryTbody = document.getElementById("analytics-expiry-tbody");
-    const usageFilterInput = document.getElementById("usage-filter");
-    const btnSaveAllowances = document.getElementById("btn-save-allowances");
-    const leaveSaveStatus = document.getElementById("leave-save-status");
+  async function loadProfile() {
+    if (!currentUser) return;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", currentUser.id)
+      .single();
 
-    const coveragePill = document.getElementById("coverage-pill");
-    const coverageSummary = document.getElementById("coverage-summary");
-    const rosterFilterInput = document.getElementById("roster-filter");
+    if (!error) currentProfile = data;
+  }
 
-    // Default analytics to collapsed on first load
-    analyticsBody.classList.add("hidden");
-    btnToggleAnalytics.textContent = "Show";
+  async function postLoginInit() {
+    const role = currentProfile?.role || "viewer";
 
-    // ===== AUTH =====
-    authForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      authError.textContent = "";
-      const email = authEmail.value.trim();
-      const password = authPassword.value;
+    userInfo.textContent = currentProfile
+      ? `${currentProfile.full_name || currentUser.email} • ${currentProfile.role}`
+      : currentUser.email;
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        authError.textContent = error.message;
-        return;
-      }
-      currentUser = data.user;
-      isPublicViewer = false;
+    isPublicViewer = false;
+    btnSignout.classList.remove("hidden");
+    authCard.classList.add("hidden");
+    appEl.classList.remove("hidden");
+
+    newWeekDate.disabled = false;
+    newWeekTemplateSelect.disabled = false;
+    btnCreateWeek.disabled = !(role === "editor" || role === "admin");
+
+    await loadTemplates();
+    await loadWeeks();
+    await loadAnalyticsYears();
+    await refreshAnalytics();
+    await refreshExpiryWatch();
+  }
+
+  (async function init() {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      currentUser = data.session.user;
       await loadProfile();
       await postLoginInit();
-    });
+    }
+  })();
 
-    btnSignout.addEventListener("click", async () => {
-      await supabase.auth.signOut();
-      currentUser = null;
-      currentProfile = null;
-      currentWeek = null;
-      isPublicViewer = false;
-      userInfo.textContent = "Not signed in";
-      btnSignout.classList.add("hidden");
-      authCard.classList.remove("hidden");
-      appEl.classList.add("hidden");
-      editorCard.classList.add("hidden");
-    });
+  // ===== TEMPLATES =====
+  async function loadTemplates() {
+    const { data, error } = await supabase
+      .from("roster_templates")
+      .select("id, name, code")
+      .order("code", { ascending: true });
 
-    btnViewer.addEventListener("click", async (e) => {
-      e.preventDefault();
-      isPublicViewer = true;
-      currentUser = null;
-      currentProfile = { full_name: "Public viewer", role: "viewer" };
-
-      userInfo.textContent = "Public viewer • read-only";
-      btnSignout.classList.add("hidden");
-      authCard.classList.add("hidden");
-      appEl.classList.remove("hidden");
-
-      newWeekDate.disabled = true;
-      newWeekTemplateSelect.disabled = true;
-      btnCreateWeek.disabled = true;
-
-      await loadTemplates();
-      await loadWeeks();
-      await loadAnalyticsYears();
-      await refreshAnalytics();
-      await refreshExpiryWatch();
-    });
-
-    async function loadProfile() {
-      if (!currentUser) return;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", currentUser.id)
-        .single();
-
-      if (!error) currentProfile = data;
+    if (error) {
+      console.error("loadTemplates error", error);
+      return;
     }
 
-    async function postLoginInit() {
-      const role = currentProfile?.role || "viewer";
+    newWeekTemplateSelect.innerHTML = '<option value="">Template…</option>';
+    for (const t of data) {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = `${t.code} – ${t.name}`;
+      newWeekTemplateSelect.appendChild(opt);
+    }
+  }
 
-      userInfo.textContent = currentProfile
-        ? `${currentProfile.full_name || currentUser.email} • ${currentProfile.role}`
-        : currentUser.email;
-
-      isPublicViewer = false;
-      btnSignout.classList.remove("hidden");
-      authCard.classList.add("hidden");
-      appEl.classList.remove("hidden");
-
-      newWeekDate.disabled = false;
-      newWeekTemplateSelect.disabled = false;
-      btnCreateWeek.disabled = !(role === "editor" || role === "admin");
-
-      await loadTemplates();
-      await loadWeeks();
-      await loadAnalyticsYears();
-      await refreshAnalytics();
-      await refreshExpiryWatch();
+  btnCreateWeek.addEventListener("click", async () => {
+    const role = currentProfile?.role || "viewer";
+    if (isPublicViewer || !(role === "editor" || role === "admin")) {
+      alert("You do not have permission to create weeks.");
+      return;
     }
 
-    (async function init() {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        currentUser = data.session.user;
-        await loadProfile();
-        await postLoginInit();
-      }
-    })();
-
-    // ===== TEMPLATES =====
-    async function loadTemplates() {
-      const { data, error } = await supabase
-        .from("roster_templates")
-        .select("id, name, code")
-        .order("code", { ascending: true });
-
-      if (error) {
-        console.error("loadTemplates error", error);
-        return;
-      }
-
-      newWeekTemplateSelect.innerHTML = '<option value="">Template…</option>';
-      for (const t of data) {
-        const opt = document.createElement("option");
-        opt.value = t.id;
-        opt.textContent = `${t.code} – ${t.name}`;
-        newWeekTemplateSelect.appendChild(opt);
-      }
+    const dateStr = newWeekDate.value;
+    const templateId = newWeekTemplateSelect.value;
+    if (!dateStr || !templateId) {
+      alert("Pick a week ending date and a template.");
+      return;
     }
 
-    btnCreateWeek.addEventListener("click", async () => {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || !(role === "editor" || role === "admin")) {
-        alert("You do not have permission to create weeks.");
-        return;
-      }
+    const { data: tmpl, error: tmplErr } = await supabase
+      .from("roster_templates")
+      .select("id, name, code, structure")
+      .eq("id", templateId)
+      .single();
 
-      const dateStr = newWeekDate.value;
-      const templateId = newWeekTemplateSelect.value;
-      if (!dateStr || !templateId) {
-        alert("Pick a week ending date and a template.");
-        return;
-      }
+    if (tmplErr) {
+      console.error(tmplErr);
+      alert("Unable to load template.");
+      return;
+    }
 
-      const { data: tmpl, error: tmplErr } = await supabase
-        .from("roster_templates")
-        .select("id, name, code, structure")
-        .eq("id", templateId)
-        .single();
+    const label = `Week - Ending ${formatUK(dateStr)}`;
+    const payload = {
+      week_ending: dateStr,
+      label,
+      status: "draft",
+      template_id: tmpl.id,
+      data: tmpl.structure,
+    };
 
-      if (tmplErr) {
-        console.error(tmplErr);
-        alert("Unable to load template.");
-        return;
-      }
+    const { data, error } = await supabase
+      .from("roster_weeks")
+      .insert(payload)
+      .select("*")
+      .single();
 
-      const label = `Week - Ending ${formatUK(dateStr)}`;
-      const payload = {
-        week_ending: dateStr,
-        label,
-        status: "draft",
-        template_id: tmpl.id,
-        data: tmpl.structure,
-      };
+    if (error) {
+      console.error(error);
+      alert("Error creating week.");
+      return;
+    }
 
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .insert(payload)
-        .select("*")
-        .single();
+    await loadWeeks();
+    await openWeek(data);
+    await loadAnalyticsYears();
+    await refreshAnalytics();
+    await refreshExpiryWatch();
+  });
 
-      if (error) {
-        console.error(error);
-        alert("Error creating week.");
-        return;
-      }
+  // ===== WEEK LIST =====
+  async function loadWeeks() {
+    const { data, error } = await supabase
+      .from("roster_weeks")
+      .select("id, week_ending, label, status, template_id, created_at, published_at, data, roster_templates(name, code)")
+      .order("week_ending", { ascending: false });
 
-      await loadWeeks();
-      await openWeek(data);
-      await loadAnalyticsYears();
-      await refreshAnalytics();
-      await refreshExpiryWatch();
+    if (error) {
+      console.error("loadWeeks error", error);
+      return;
+    }
+
+    weeksTbody.innerHTML = "";
+    for (const w of data) {
+      const tr = document.createElement("tr");
+      const tmplLabel = w.roster_templates
+        ? `${w.roster_templates.code} – ${w.roster_templates.name}`
+        : "N/A";
+
+      const metrics = computeWeekMetrics(w);
+      const hasGaps = metrics.uncovered > 0;
+
+      const coverageCell = hasGaps
+        ? `<span class="tag" style="border-color:#fbbf24;background:#fef9c3;color:#92400e;">⚠ Gaps</span>`
+        : `<span class="tag" style="border-color:#22c55e;background:#ecfdf3;color:#166534;">✅ Full</span>`;
+
+      tr.innerHTML = `
+        <td>${formatUK(w.week_ending)}</td>
+        <td>${w.label || ""}</td>
+        <td>
+          <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
+            ${w.status}
+          </span>
+        </td>
+        <td>${tmplLabel}</td>
+        <td>${coverageCell}</td>
+        <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
+        <td>
+          <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
+        </td>
+      `;
+      weeksTbody.appendChild(tr);
+    }
+
+    document.querySelectorAll(".btn-open-week").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-id");
+        const { data, error } = await supabase
+          .from("roster_weeks")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+        await openWeek(data);
+      });
     });
+  }
 
-    // ===== WEEK LIST =====
-    async function loadWeeks() {
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .select("id, week_ending, label, status, template_id, created_at, published_at, data, roster_templates(name, code)")
-        .order("week_ending", { ascending: false });
+  // Mark which cells were originally SPARE in the base roster
+  function ensureSpareOrigin(struct) {
+    if (!struct || !Array.isArray(struct.sections)) return;
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-      if (error) {
-        console.error("loadWeeks error", error);
-        return;
-      }
-
-      weeksTbody.innerHTML = "";
-      for (const w of data) {
-        const tr = document.createElement("tr");
-        const tmplLabel = w.roster_templates
-          ? `${w.roster_templates.code} – ${w.roster_templates.name}`
-          : "N/A";
-
-        // Use metrics helper to see if this week has gaps
-        const metrics = computeWeekMetrics(w);
-        const hasGaps = metrics.uncovered > 0;
-
-        const coverageCell = hasGaps
-          ? `<span class="tag" style="border-color:#fbbf24;background:#fef9c3;color:#92400e;">⚠ Gaps</span>`
-          : `<span class="tag" style="border-color:#22c55e;background:#ecfdf3;color:#166534;">✅ Full</span>`;
-
-        tr.innerHTML = `
-          <td>${formatUK(w.week_ending)}</td>
-          <td>${w.label || ""}</td>
-          <td>
-            <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
-              ${w.status}
-            </span>
-          </td>
-          <td>${tmplLabel}</td>
-          <td>${coverageCell}</td>
-          <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
-          <td>
-            <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
-          </td>
-        `;
-        weeksTbody.appendChild(tr);
-      }
-
-      document.querySelectorAll(".btn-open-week").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const id = btn.getAttribute("data-id");
-          const { data, error } = await supabase
-            .from("roster_weeks")
-            .select("*")
-            .eq("id", id)
-            .single();
-
-          if (error) {
-            console.error(error);
-            return;
-          }
-          await openWeek(data);
+    struct.sections.forEach((section) => {
+      (section.rows || []).forEach((row) => {
+        if (!row.spare_origin) row.spare_origin = {};
+        days.forEach((day) => {
+          if (typeof row.spare_origin[day] === "boolean") return;
+          const v = (row.shifts && row.shifts[day])
+            ? String(row.shifts[day]).toUpperCase()
+            : "";
+          row.spare_origin[day] = v.includes("SPARE");
         });
       });
+    });
+  }
+
+  async function openWeek(weekRow) {
+    currentWeek = weekRow;
+    ensureSpareOrigin(currentWeek.data);
+
+    editorCard.classList.remove("hidden");
+    editorTitle.textContent = `Week ending ${formatUK(weekRow.week_ending)}`;
+    editorSubtitle.textContent = weekRow.label || "";
+    setStatusPill(weekRow.status);
+    renderRosterGrid(weekRow.data);
+    syncEditorButtons();
+    updateCoverageBanner();
+  }
+
+  function setStatusPill(status) {
+    editorStatusPill.textContent = status;
+    editorStatusPill.classList.remove("status-draft", "status-published");
+    editorStatusPill.classList.add(status === "published" ? "status-published" : "status-draft");
+  }
+
+  function syncEditorButtons() {
+    const role = currentProfile?.role || "viewer";
+    const isEditor = role === "editor" || role === "admin";
+    const isDraft = currentWeek?.status === "draft";
+
+    if (isPublicViewer || role === "viewer") {
+      btnSaveWeek.disabled = true;
+      btnPublishWeek.disabled = true;
+      btnPublishWeek.textContent = "Publish";
+      return;
     }
 
-    // Mark which cells were originally SPARE in the base roster
-    function ensureSpareOrigin(struct) {
-      if (!struct || !Array.isArray(struct.sections)) return;
+    btnSaveWeek.disabled = !(isEditor && isDraft);
+    btnPublishWeek.disabled = !isEditor;
+    btnPublishWeek.textContent = isDraft ? "Publish" : "Re-publish";
+  }
+
+  // ===== CLASSIFY SHIFTS =====
+  function classifyShift(value) {
+    const classes = [];
+    if (!value) return "";
+
+    const v = String(value).trim().toUpperCase();
+
+    if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
+      classes.push("shift-day");
+    }
+    if (v.includes("1800-0600") || v.includes("1830-0630")) {
+      classes.push("shift-night");
+    }
+    if (v.includes("SPARE")) {
+      classes.push("shift-spare");
+    }
+    if (v === "N/A") {
+      classes.push("shift-oo");
+    }
+    if (v.includes("A/L")) {
+      classes.push("shift-al");
+    }
+    if (v.includes("C/L")) {
+      classes.push("shift-cl");
+    }
+    if (v.includes("SICK") || v.includes("S/L")) {
+      classes.push("shift-sick");
+    }
+    if (v === "RD") {
+      classes.push("shift-rd");
+    }
+    if (v.includes("B.O")) {
+      classes.push("shift-al");
+    }
+    if (v.includes("LROP") || v.includes("HROP")) {
+      classes.push("shift-rop");
+    }
+
+    return classes.join(" ");
+  }
+
+  // Ensure uncovered structure supports two slots (s1, s2)
+  function ensureUncovered(section) {
+    if (!section.uncovered) {
+      section.uncovered = {};
+    }
+
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+    days.forEach((day) => {
+      const current = section.uncovered[day];
+
+      if (typeof current === "string") {
+        section.uncovered[day] = {
+          s1: current,
+          s2: ""
+        };
+      } else if (!current || typeof current !== "object") {
+        section.uncovered[day] = {
+          s1: "",
+          s2: ""
+        };
+      } else {
+        section.uncovered[day].s1 = section.uncovered[day].s1 || "";
+        section.uncovered[day].s2 = section.uncovered[day].s2 || "";
+      }
+    });
+  }
+
+  // Returns true if the current week-ending date includes today's date
+  function weekContainsToday(weekEndingStr) {
+    if (!weekEndingStr) return false;
+    const end = new Date(weekEndingStr);
+    if (isNaN(end)) return false;
+
+    const today = new Date();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    const diffDays = Math.floor((end - today) / oneDay);
+
+    return diffDays >= 0 && diffDays <= 6;
+  }
+
+  // ===== ROSTER RENDERING =====
+  function renderRosterGrid(data) {
+    rosterGrid.innerHTML = "";
+
+    if (!data || !Array.isArray(data.sections)) {
+      rosterGrid.innerHTML = "<p class='muted'>No sections defined in this roster.</p>";
+      return;
+    }
+
+    const role = currentProfile?.role || "viewer";
+    const readOnly = isPublicViewer || role === "viewer";
+
+    data.sections.forEach((section) => {
+      ensureUncovered(section);
+
+      const sectionDiv = document.createElement("div");
+      sectionDiv.classList.add("mt-3");
+
+      const headerDiv = document.createElement("div");
+      headerDiv.classList.add("flex-between", "mb-1");
+      headerDiv.innerHTML = `
+        <div class="flex">
+          <h3 style="margin:0;font-size:0.95rem;color:#0f172a;">${section.title || "Section"}</h3>
+          ${section.note ? `<span class="tag">${section.note}</span>` : ""}
+        </div>
+      `;
+      sectionDiv.appendChild(headerDiv);
+
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      thead.innerHTML = `
+        <tr>
+          <th>Name</th>
+          <th>Sun</th>
+          <th>Mon</th>
+          <th>Tue</th>
+          <th>Wed</th>
+          <th>Thu</th>
+          <th>Fri</th>
+          <th>Sat</th>
+          <th>Remarks</th>
+        </tr>
+      `;
+      table.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+
+      // Uncovered row
+      const uncoveredTr = document.createElement("tr");
+
+      const uncoveredNameTd = document.createElement("td");
+      uncoveredNameTd.textContent = "Uncovered shifts";
+      uncoveredNameTd.style.fontWeight = "600";
+      uncoveredNameTd.style.background = "#e5e7eb";
+      uncoveredNameTd.style.textAlign = "left";
+      uncoveredTr.appendChild(uncoveredNameTd);
+
       const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      days.forEach((day) => {
+        const td = document.createElement("td");
+        const dayObj = (section.uncovered && section.uncovered[day]) || { s1: "", s2: "" };
+
+        ["s1", "s2"].forEach((slot) => {
+          const input = document.createElement("input");
+          input.value = dayObj[slot] || "";
+          input.dataset.sectionId = section.id;
+          input.dataset.day = day;
+          input.dataset.slot = slot;
+          input.className = "shift-input " + classifyShift(input.value);
+          input.style.display = "block";
+          input.style.marginBottom = "2px";
+
+          const roleInner = currentProfile?.role || "viewer";
+          const readOnlyInner = isPublicViewer || roleInner === "viewer";
+
+          if (readOnlyInner) {
+            input.disabled = true;
+          } else {
+            input.addEventListener("input", handleUncoveredChange);
+          }
+
+          td.appendChild(input);
+        });
+
+        uncoveredTr.appendChild(td);
+      });
+
+      const uncoveredRemarksTd = document.createElement("td");
+      uncoveredRemarksTd.textContent = "";
+      uncoveredTr.appendChild(uncoveredRemarksTd);
+
+      tbody.appendChild(uncoveredTr);
+
+      // Staff rows
+      (section.rows || []).forEach((row, rowIndex) => {
+        const tr = document.createElement("tr");
+
+        function makeCell(key) {
+          const td = document.createElement("td");
+
+          if (row.spare_origin && row.spare_origin[key]) {
+            td.classList.add("spare-origin-cell");
+          }
+
+          const wrap = document.createElement("div");
+          wrap.className = "shift-cell-wrap";
+
+          const input = document.createElement("input");
+          input.value = row.shifts?.[key] || "";
+          input.dataset.sectionId = section.id;
+          input.dataset.rowIndex = rowIndex;
+          input.dataset.field = key;
+          input.className = "shift-input " + classifyShift(input.value);
+
+          const select = document.createElement("select");
+          select.className = "shift-preset";
+          const presetOptions = ["", "0600-1800", "1800-0600", "0700-1900", "0630-1830", "1830-0630"];
+          presetOptions.forEach((val) => {
+            const opt = document.createElement("option");
+            opt.value = val;
+            opt.textContent = val || "⧉";
+            select.appendChild(opt);
+          });
+
+          const rdwBtn = document.createElement("button");
+          rdwBtn.type = "button";
+          rdwBtn.textContent = "RDW";
+          rdwBtn.className = "rdw-toggle";
+
+          const rdwActive = row.rdw && row.rdw[key];
+          if (rdwActive) {
+            rdwBtn.classList.add("rdw-active");
+          }
+
+          const roleInner = currentProfile?.role || "viewer";
+          const readOnlyInner = isPublicViewer || roleInner === "viewer";
+
+          if (readOnlyInner) {
+            input.disabled = true;
+            select.disabled = true;
+            select.style.display = "none";
+            rdwBtn.disabled = true;
+          } else {
+            input.addEventListener("input", handleShiftChange);
+
+            select.addEventListener("change", () => {
+              if (!select.value) return;
+              input.value = select.value;
+              handleShiftChange({ target: input });
+            });
+
+            rdwBtn.addEventListener("click", () => {
+              const sections = currentWeek.data.sections || [];
+              const sec = sections.find((s) => s.id === section.id);
+              if (!sec) return;
+              if (!sec.rows[rowIndex]) sec.rows[rowIndex] = {};
+              if (!sec.rows[rowIndex].rdw) sec.rows[rowIndex].rdw = {};
+              const current = !!sec.rows[rowIndex].rdw[key];
+              sec.rows[rowIndex].rdw[key] = !current;
+              rdwBtn.classList.toggle("rdw-active", !current);
+            });
+          }
+
+          wrap.appendChild(input);
+
+          if (!readOnlyInner) {
+            wrap.appendChild(select);
+          } else {
+            select.style.display = "none";
+          }
+
+          wrap.appendChild(rdwBtn);
+
+          td.appendChild(wrap);
+          return td;
+        }
+
+        const nameTd = document.createElement("td");
+        const nameInput = document.createElement("input");
+        nameInput.value = row.staff_name || "";
+        nameInput.dataset.sectionId = section.id;
+        nameInput.dataset.rowIndex = rowIndex;
+        nameInput.dataset.field = "staff_name";
+
+        if (readOnly) {
+          nameInput.disabled = true;
+        } else {
+          nameInput.addEventListener("input", handleNameChange);
+        }
+
+        nameTd.appendChild(nameInput);
+        tr.appendChild(nameTd);
+
+        ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].forEach((day) => {
+          tr.appendChild(makeCell(day));
+        });
+
+        const remarksTd = document.createElement("td");
+        const remarksInput = document.createElement("input");
+        remarksInput.value = row.remarks || "";
+        remarksInput.dataset.sectionId = section.id;
+        remarksInput.dataset.rowIndex = rowIndex;
+        remarksInput.dataset.field = "remarks";
+
+        if (readOnly) {
+          remarksInput.disabled = true;
+        } else {
+          remarksInput.addEventListener("input", handleRemarksChange);
+        }
+
+        remarksTd.appendChild(remarksInput);
+        tr.appendChild(remarksTd);
+
+        tbody.appendChild(tr);
+      });
+
+      table.appendChild(tbody);
+
+      // Highlight current day column if this roster week contains today's date
+      if (currentWeek && weekContainsToday(currentWeek.week_ending)) {
+        const today = new Date();
+        const jsDay = today.getDay(); // 0 = Sun ... 6 = Sat
+        const dayIndex = jsDay;
+
+        const headerCells = thead.querySelectorAll("th");
+        if (headerCells[dayIndex + 1]) {
+          headerCells[dayIndex + 1].classList.add("today-col");
+        }
+
+        const bodyRows = tbody.querySelectorAll("tr");
+        bodyRows.forEach((row) => {
+          const cells = row.querySelectorAll("td");
+          if (cells[dayIndex + 1]) {
+            cells[dayIndex + 1].classList.add("today-col");
+          }
+        });
+      }
+
+      sectionDiv.appendChild(table);
+      rosterGrid.appendChild(sectionDiv);
+    });
+
+    applyRosterFilter();
+  }
+
+  // ===== CHANGE HANDLERS =====
+  function handleUncoveredChange(e) {
+    const role = currentProfile?.role || "viewer";
+    if (isPublicViewer || role === "viewer") return;
+
+    const input = e.target;
+    const sectionId = input.dataset.sectionId;
+    const day = input.dataset.day;
+    const slot = input.dataset.slot || "s1";
+
+    const sections = currentWeek.data.sections || [];
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    ensureUncovered(section);
+    const dayObj = section.uncovered[day];
+    if (!dayObj) return;
+
+    dayObj[slot] = input.value;
+    input.className = "shift-input " + classifyShift(input.value);
+    updateCoverageBanner();
+  }
+
+  function handleNameChange(e) {
+    const role = currentProfile?.role || "viewer";
+    if (isPublicViewer || role === "viewer") return;
+
+    const input = e.target;
+    const sectionId = input.dataset.sectionId;
+    const rowIndex = parseInt(input.dataset.rowIndex, 10);
+
+    const sections = currentWeek.data.sections || [];
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
+    section.rows[rowIndex].staff_name = input.value;
+  }
+
+  function handleRemarksChange(e) {
+    const role = currentProfile?.role || "viewer";
+    if (isPublicViewer || role === "viewer") return;
+
+    const input = e.target;
+    const sectionId = input.dataset.sectionId;
+    const rowIndex = parseInt(input.dataset.rowIndex, 10);
+
+    const sections = currentWeek.data.sections || [];
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
+    section.rows[rowIndex].remarks = input.value;
+  }
+
+  function handleShiftChange(e) {
+    const role = currentProfile?.role || "viewer";
+    if (isPublicViewer || role === "viewer") return;
+
+    const input = e.target;
+    const sectionId = input.dataset.sectionId;
+    const rowIndex = parseInt(input.dataset.rowIndex, 10);
+    const field = input.dataset.field;
+
+    const sections = currentWeek.data.sections || [];
+    const section = sections.find((s) => s.id === sectionId);
+    if (!section) return;
+
+    if (!section.rows[rowIndex]) section.rows[rowIndex] = { shifts: {} };
+    if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
+    section.rows[rowIndex].shifts[field] = input.value;
+
+    input.className = "shift-input " + classifyShift(input.value);
+    updateCoverageBanner();
+  }
+
+  // ===== SAVE / PUBLISH / PRINT =====
+  btnSaveWeek.addEventListener("click", async () => {
+    const role = currentProfile?.role || "viewer";
+    if (!currentWeek || isPublicViewer || role === "viewer") return;
+
+    const { data, error } = await supabase
+      .from("roster_weeks")
+      .update({ data: currentWeek.data })
+      .eq("id", currentWeek.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("Error saving week.");
+      return;
+    }
+    currentWeek = data;
+    alert("Draft saved.");
+  });
+
+  btnPublishWeek.addEventListener("click", async () => {
+    const role = currentProfile?.role || "viewer";
+    if (!currentWeek || isPublicViewer || role === "viewer") return;
+
+    const { data, error } = await supabase
+      .from("roster_weeks")
+      .update({
+        status: "published",
+        published_at: new Date().toISOString(),
+        data: currentWeek.data
+      })
+      .eq("id", currentWeek.id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("Error publishing week.");
+      return;
+    }
+
+    currentWeek = data;
+    setStatusPill("published");
+    syncEditorButtons();
+    await loadWeeks();
+    await loadAnalyticsYears();
+    await refreshAnalytics();
+    await refreshExpiryWatch();
+    alert("Week published.");
+  });
+
+  btnPrintWeek.addEventListener("click", () => {
+    if (!currentWeek) {
+      alert("Open a week before printing.");
+      return;
+    }
+    window.print();
+  });
+
+  // ===== ANALYTICS =====
+  async function loadAnalyticsYears() {
+    const { data, error } = await supabase
+      .from("roster_weeks")
+      .select("week_ending")
+      .order("week_ending", { ascending: false });
+
+    if (error) {
+      console.error("loadAnalyticsYears error", error);
+      return;
+    }
+
+    const yearsSet = new Set();
+    data.forEach((w) => {
+      if (!w.week_ending) return;
+      const d = new Date(w.week_ending);
+      if (!isNaN(d)) {
+        yearsSet.add(d.getFullYear());
+      }
+    });
+
+    const years = Array.from(yearsSet).sort((a, b) => b - a);
+    analyticsYearSelect.innerHTML = "";
+
+    if (!years.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No data";
+      analyticsYearSelect.appendChild(opt);
+      return;
+    }
+
+    years.forEach((y) => {
+      const opt = document.createElement("option");
+      opt.value = String(y);
+      opt.textContent = y;
+      analyticsYearSelect.appendChild(opt);
+    });
+
+    const currentYear = new Date().getFullYear();
+    if (years.includes(currentYear)) {
+      analyticsYearSelect.value = String(currentYear);
+    } else {
+      analyticsYearSelect.value = String(years[0]);
+    }
+  }
+
+  btnRefreshAnalytics.addEventListener("click", () => {
+    refreshAnalytics();
+    refreshExpiryWatch();
+  });
+
+  btnToggleAnalytics.addEventListener("click", () => {
+    const collapsed = analyticsBody.classList.toggle("hidden");
+    btnToggleAnalytics.textContent = collapsed ? "Show" : "Hide";
+  });
+
+  async function loadLeaveAllowances(year) {
+    leaveAllowancesByName = {};
+    currentAnalyticsYear = year;
+
+    const { data, error } = await supabase
+      .from("leave_allowances")
+      .select("id, staff_name, year, al_allowance, cl_base_allowance")
+      .eq("year", year);
+
+    if (error) {
+      console.error("loadLeaveAllowances error", error);
+      return;
+    }
+
+    (data || []).forEach((row) => {
+      const name = (row.staff_name || "").trim();
+      if (!name) return;
+      leaveAllowancesByName[name] = {
+        id: row.id,
+        al: row.al_allowance || 0
+      };
+    });
+  }
+
+  // Year-scoped analytics: A/L, C/L, RDW etc for the selected calendar year
+  function computeYearAnalyticsFromWeeks(weeks) {
+    const weeklyStats = [];
+    const usageMap = {};
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+    weeks.forEach((w) => {
+      let weekAL = 0;
+      let weekCL = 0;
+      let weekSick = 0;
+      let weekRDWTotal = 0;
+      let weekRDWSun = 0;
+      let weekUncovered = 0;
+
+      const struct = w.data;
+      if (!struct || !Array.isArray(struct.sections)) return;
 
       struct.sections.forEach((section) => {
-        (section.rows || []).forEach((row) => {
-          if (!row.spare_origin) row.spare_origin = {};
-          days.forEach((day) => {
-            // If already set, leave it; we only infer when missing
-            if (typeof row.spare_origin[day] === "boolean") return;
-            const v = (row.shifts && row.shifts[day])
-              ? String(row.shifts[day]).toUpperCase()
-              : "";
-            row.spare_origin[day] = v.includes("SPARE");
-          });
-        });
-      });
-    }
-
-    async function openWeek(weekRow) {
-      currentWeek = weekRow;
-      // Derive / ensure spare-origin markers for this week's data
-      ensureSpareOrigin(currentWeek.data);
-
-      editorCard.classList.remove("hidden");
-      editorTitle.textContent = `Week ending ${formatUK(weekRow.week_ending)}`;
-      editorSubtitle.textContent = weekRow.label || "";
-      setStatusPill(weekRow.status);
-      renderRosterGrid(weekRow.data);
-      syncEditorButtons();
-      updateCoverageBanner();
-    }
-
-    function setStatusPill(status) {
-      editorStatusPill.textContent = status;
-      editorStatusPill.classList.remove("status-draft", "status-published");
-      editorStatusPill.classList.add(status === "published" ? "status-published" : "status-draft");
-    }
-
-    function syncEditorButtons() {
-      const role = currentProfile?.role || "viewer";
-      const isEditor = role === "editor" || role === "admin";
-      const isDraft = currentWeek?.status === "draft";
-
-      if (isPublicViewer || role === "viewer") {
-        btnSaveWeek.disabled = true;
-        btnPublishWeek.disabled = true;
-        btnPublishWeek.textContent = "Publish";
-        return;
-      }
-
-      btnSaveWeek.disabled = !(isEditor && isDraft);
-      btnPublishWeek.disabled = !isEditor;
-      btnPublishWeek.textContent = isDraft ? "Publish" : "Re-publish";
-    }
-
-    // ===== CLASSIFY SHIFTS =====
-    function classifyShift(value) {
-      const classes = [];
-      if (!value) return "";
-
-      const v = String(value).trim().toUpperCase();
-
-      if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
-        classes.push("shift-day");
-      }
-      if (v.includes("1800-0600") || v.includes("1830-0630")) {
-        classes.push("shift-night");
-      }
-      if (v.includes("SPARE")) {
-        classes.push("shift-spare");
-      }
-      if (v === "N/A") {
-        classes.push("shift-oo");
-      }
-      if (v.includes("A/L")) {
-        classes.push("shift-al");
-      }
-      if (v.includes("C/L")) {
-        classes.push("shift-cl");
-      }
-      if (v.includes("SICK") || v.includes("S/L")) {
-        classes.push("shift-sick");
-      }
-      if (v === "RD") {
-        classes.push("shift-rd");
-      }
-      if (v.includes("B.O")) {
-        classes.push("shift-al");
-      }
-      if (v.includes("LROP") || v.includes("HROP")) {
-        classes.push("shift-rop");
-      }
-
-      return classes.join(" ");
-    }
-
-    // Ensure uncovered structure supports two slots (s1, s2)
-    function ensureUncovered(section) {
-      if (!section.uncovered) {
-        section.uncovered = {};
-      }
-
-      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-      days.forEach((day) => {
-        const current = section.uncovered[day];
-
-        // Backwards compatibility: old data was a simple string
-        if (typeof current === "string") {
-          section.uncovered[day] = {
-            s1: current,
-            s2: ""
-          };
-        } else if (!current || typeof current !== "object") {
-          section.uncovered[day] = {
-            s1: "",
-            s2: ""
-          };
-        } else {
-          section.uncovered[day].s1 = section.uncovered[day].s1 || "";
-          section.uncovered[day].s2 = section.uncovered[day].s2 || "";
-        }
-      });
-    }
-
-    // Returns true if the current week-ending date includes today's date
-    function weekContainsToday(weekEndingStr) {
-      if (!weekEndingStr) return false;
-      const end = new Date(weekEndingStr);
-      if (isNaN(end)) return false;
-
-      const today = new Date();
-      const oneDay = 24 * 60 * 60 * 1000;
-
-      const diffDays = Math.floor((end - today) / oneDay);
-
-      // Treat week as 7 days ending on 'week_ending'
-      return diffDays >= 0 && diffDays <= 6;
-    }
-
-    // ===== ROSTER RENDERING =====
-    function renderRosterGrid(data) {
-      rosterGrid.innerHTML = "";
-
-      if (!data || !Array.isArray(data.sections)) {
-        rosterGrid.innerHTML = "<p class='muted'>No sections defined in this roster.</p>";
-        return;
-      }
-
-      const role = currentProfile?.role || "viewer";
-      const readOnly = isPublicViewer || role === "viewer";
-
-      data.sections.forEach((section) => {
         ensureUncovered(section);
 
-        const sectionDiv = document.createElement("div");
-        sectionDiv.classList.add("mt-3");
-
-        const headerDiv = document.createElement("div");
-        headerDiv.classList.add("flex-between", "mb-1");
-        headerDiv.innerHTML = `
-          <div class="flex">
-            <h3 style="margin:0;font-size:0.95rem;color:#0f172a;">${section.title || "Section"}</h3>
-            ${section.note ? `<span class="tag">${section.note}</span>` : ""}
-          </div>
-        `;
-        sectionDiv.appendChild(headerDiv);
-
-        const table = document.createElement("table");
-        const thead = document.createElement("thead");
-        thead.innerHTML = `
-          <tr>
-            <th>Name</th>
-            <th>Sun</th>
-            <th>Mon</th>
-            <th>Tue</th>
-            <th>Wed</th>
-            <th>Thu</th>
-            <th>Fri</th>
-            <th>Sat</th>
-            <th>Remarks</th>
-          </tr>
-        `;
-        table.appendChild(thead);
-
-        const tbody = document.createElement("tbody");
-
-        // Uncovered row
-        const uncoveredTr = document.createElement("tr");
-
-        const uncoveredNameTd = document.createElement("td");
-        uncoveredNameTd.textContent = "Uncovered shifts";
-        uncoveredNameTd.style.fontWeight = "600";
-        uncoveredNameTd.style.background = "#e5e7eb";
-        uncoveredNameTd.style.textAlign = "left";
-        uncoveredTr.appendChild(uncoveredNameTd);
-
-        const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-        days.forEach((day) => {
-          const td = document.createElement("td");
-          const dayObj = (section.uncovered && section.uncovered[day]) || { s1: "", s2: "" };
-
-          ["s1", "s2"].forEach((slot) => {
-            const input = document.createElement("input");
-            input.value = dayObj[slot] || "";
-            input.dataset.sectionId = section.id;
-            input.dataset.day = day;
-            input.dataset.slot = slot;
-            input.className = "shift-input " + classifyShift(input.value);
-            input.style.display = "block";
-            input.style.marginBottom = "2px";
-
-            const roleInner = currentProfile?.role || "viewer";
-            const readOnlyInner = isPublicViewer || roleInner === "viewer";
-
-            if (readOnlyInner) {
-              input.disabled = true;
-            } else {
-              input.addEventListener("input", handleUncoveredChange);
-            }
-
-            td.appendChild(input);
-          });
-
-          uncoveredTr.appendChild(td);
-        });
-
-        const uncoveredRemarksTd = document.createElement("td");
-        uncoveredRemarksTd.textContent = "";
-        uncoveredTr.appendChild(uncoveredRemarksTd);
-
-        tbody.appendChild(uncoveredTr);
-
-        // Staff rows
-        (section.rows || []).forEach((row, rowIndex) => {
-          const tr = document.createElement("tr");
-
-          function makeCell(key) {
-            const td = document.createElement("td");
-
-            // Mark any cell that was originally SPARE in the base roster
-            if (row.spare_origin && row.spare_origin[key]) {
-              td.classList.add("spare-origin-cell");
-            }
-
-            const wrap = document.createElement("div");
-            wrap.className = "shift-cell-wrap";
-
-            const input = document.createElement("input");
-            input.value = row.shifts?.[key] || "";
-            input.dataset.sectionId = section.id;
-            input.dataset.rowIndex = rowIndex;
-            input.dataset.field = key;
-            input.className = "shift-input " + classifyShift(input.value);
-
-            const select = document.createElement("select");
-            select.className = "shift-preset";
-            const presetOptions = ["", "0600-1800", "1800-0600", "0700-1900", "0630-1830", "1830-0630"];
-            presetOptions.forEach((val) => {
-              const opt = document.createElement("option");
-              opt.value = val;
-              opt.textContent = val || "⧉";
-              select.appendChild(opt);
-            });
-
-            const rdwBtn = document.createElement("button");
-            rdwBtn.type = "button";
-            rdwBtn.textContent = "RDW";
-            rdwBtn.className = "rdw-toggle";
-
-            const rdwActive = row.rdw && row.rdw[key];
-            if (rdwActive) {
-              rdwBtn.classList.add("rdw-active");
-            }
-
-            const roleInner = currentProfile?.role || "viewer";
-            const readOnlyInner = isPublicViewer || roleInner === "viewer";
-
-            if (readOnlyInner) {
-              input.disabled = true;
-              select.disabled = true;
-              select.style.display = "none";
-              rdwBtn.disabled = true;
-            } else {
-              input.addEventListener("input", handleShiftChange);
-
-              select.addEventListener("change", () => {
-                if (!select.value) return;
-                input.value = select.value;
-                handleShiftChange({ target: input });
-              });
-
-              rdwBtn.addEventListener("click", () => {
-                const sections = currentWeek.data.sections || [];
-                const sec = sections.find((s) => s.id === section.id);
-                if (!sec) return;
-                if (!sec.rows[rowIndex]) sec.rows[rowIndex] = {};
-                if (!sec.rows[rowIndex].rdw) sec.rows[rowIndex].rdw = {};
-                const current = !!sec.rows[rowIndex].rdw[key];
-                sec.rows[rowIndex].rdw[key] = !current;
-                rdwBtn.classList.toggle("rdw-active", !current);
-              });
-            }
-
-            wrap.appendChild(input);
-
-            if (!readOnlyInner) {
-              wrap.appendChild(select);
-            } else {
-              select.style.display = "none";
-            }
-
-            // Always append RDW pill so tags are visible even read-only
-            wrap.appendChild(rdwBtn);
-
-            td.appendChild(wrap);
-            return td;
-          }
-
-          const nameTd = document.createElement("td");
-          const nameInput = document.createElement("input");
-          nameInput.value = row.staff_name || "";
-          nameInput.dataset.sectionId = section.id;
-          nameInput.dataset.rowIndex = rowIndex;
-          nameInput.dataset.field = "staff_name";
-
-          if (readOnly) {
-            nameInput.disabled = true;
-          } else {
-            nameInput.addEventListener("input", handleNameChange);
-          }
-
-          nameTd.appendChild(nameInput);
-          tr.appendChild(nameTd);
-
-          ["sun", "mon", "tue", "wed", "thu", "fri", "sat"].forEach((day) => {
-            tr.appendChild(makeCell(day));
-          });
-
-          const remarksTd = document.createElement("td");
-          const remarksInput = document.createElement("input");
-          remarksInput.value = row.remarks || "";
-          remarksInput.dataset.sectionId = section.id;
-          remarksInput.dataset.rowIndex = rowIndex;
-          remarksInput.dataset.field = "remarks";
-
-          if (readOnly) {
-            remarksInput.disabled = true;
-          } else {
-            remarksInput.addEventListener("input", handleRemarksChange);
-          }
-
-          remarksTd.appendChild(remarksInput);
-          tr.appendChild(remarksTd);
-
-          tbody.appendChild(tr);
-        });
-
-        table.appendChild(tbody);
-
-        // Highlight current day column if this roster week contains today's date
-        if (currentWeek && weekContainsToday(currentWeek.week_ending)) {
-          const today = new Date();
-          const jsDay = today.getDay(); // 0 = Sun ... 6 = Sat
-          const dayIndex = jsDay;       // 0-based, matching [Sun..Sat] after "Name" col
-
-          const headerCells = thead.querySelectorAll("th");
-          if (headerCells[dayIndex + 1]) {
-            headerCells[dayIndex + 1].classList.add("today-col");
-          }
-
-          const bodyRows = tbody.querySelectorAll("tr");
-          bodyRows.forEach((row) => {
-            const cells = row.querySelectorAll("td");
-            if (cells[dayIndex + 1]) {
-              cells[dayIndex + 1].classList.add("today-col");
-            }
-          });
-        }
-
-        sectionDiv.appendChild(table);
-        rosterGrid.appendChild(sectionDiv);
-      });
-
-      // Re-apply any active per-week name filter
-      applyRosterFilter();
-    }
-
-    // ===== CHANGE HANDLERS =====
-    function handleUncoveredChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
-
-      const input = e.target;
-      const sectionId = input.dataset.sectionId;
-      const day = input.dataset.day;
-      const slot = input.dataset.slot || "s1";
-
-      const sections = currentWeek.data.sections || [];
-      const section = sections.find((s) => s.id === sectionId);
-      if (!section) return;
-
-      ensureUncovered(section);
-      const dayObj = section.uncovered[day];
-      if (!dayObj) return;
-
-      dayObj[slot] = input.value;
-      input.className = "shift-input " + classifyShift(input.value);
-      updateCoverageBanner();
-    }
-
-    function handleNameChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
-
-      const input = e.target;
-      const sectionId = input.dataset.sectionId;
-      const rowIndex = parseInt(input.dataset.rowIndex, 10);
-
-      const sections = currentWeek.data.sections || [];
-      const section = sections.find((s) => s.id === sectionId);
-      if (!section) return;
-
-      if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
-      section.rows[rowIndex].staff_name = input.value;
-    }
-
-    function handleRemarksChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
-
-      const input = e.target;
-      const sectionId = input.dataset.sectionId;
-      const rowIndex = parseInt(input.dataset.rowIndex, 10);
-
-      const sections = currentWeek.data.sections || [];
-      const section = sections.find((s) => s.id === sectionId);
-      if (!section) return;
-
-      if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
-      section.rows[rowIndex].remarks = input.value;
-    }
-
-    function handleShiftChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
-
-      const input = e.target;
-      const sectionId = input.dataset.sectionId;
-      const rowIndex = parseInt(input.dataset.rowIndex, 10);
-      const field = input.dataset.field;
-
-      const sections = currentWeek.data.sections || [];
-      const section = sections.find((s) => s.id === sectionId);
-      if (!section) return;
-
-      if (!section.rows[rowIndex]) section.rows[rowIndex] = { shifts: {} };
-      if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
-      section.rows[rowIndex].shifts[field] = input.value;
-
-      // Note: we deliberately do NOT touch row.spare_origin[field] here,
-      // so the "original spare" marker stays even when overwritten.
-
-      input.className = "shift-input " + classifyShift(input.value);
-      updateCoverageBanner();
-    }
-
-    // ===== SAVE / PUBLISH / PRINT =====
-    btnSaveWeek.addEventListener("click", async () => {
-      if (!currentWeek) return;
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
-
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .update({ data: currentWeek.data })
-        .eq("id", currentWeek.id)
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error(error);
-        alert("Error saving week.");
-        return;
-      }
-      currentWeek = data;
-      alert("Draft saved.");
-    });
-
-    btnPublishWeek.addEventListener("click", async () => {
-      if (!currentWeek) return;
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
-
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .update({
-          status: "published",
-          published_at: new Date().toISOString(),
-          data: currentWeek.data
-        })
-        .eq("id", currentWeek.id)
-        .select("*")
-        .single();
-
-      if (error) {
-        console.error(error);
-        alert("Error publishing week.");
-        return;
-      }
-
-      currentWeek = data;
-      setStatusPill("published");
-      syncEditorButtons();
-      await loadWeeks();
-      await loadAnalyticsYears();
-      await refreshAnalytics();
-      await refreshExpiryWatch();
-      alert("Week published.");
-    });
-
-    btnPrintWeek.addEventListener("click", () => {
-      if (!currentWeek) {
-        alert("Open a week before printing.");
-        return;
-      }
-      window.print();
-    });
-
-    // ===== ANALYTICS =====
-    async function loadAnalyticsYears() {
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .select("week_ending")
-        .order("week_ending", { ascending: false });
-
-      if (error) {
-        console.error("loadAnalyticsYears error", error);
-        return;
-      }
-
-      const yearsSet = new Set();
-      data.forEach((w) => {
-        if (!w.week_ending) return;
-        const d = new Date(w.week_ending);
-        if (!isNaN(d)) {
-          yearsSet.add(d.getFullYear());
-        }
-      });
-
-      const years = Array.from(yearsSet).sort((a, b) => b - a);
-      analyticsYearSelect.innerHTML = "";
-
-      if (!years.length) {
-        const opt = document.createElement("option");
-        opt.value = "";
-        opt.textContent = "No data";
-        analyticsYearSelect.appendChild(opt);
-        return;
-      }
-
-      years.forEach((y) => {
-        const opt = document.createElement("option");
-        opt.value = String(y);
-        opt.textContent = y;
-        analyticsYearSelect.appendChild(opt);
-      });
-
-      const currentYear = new Date().getFullYear();
-      if (years.includes(currentYear)) {
-        analyticsYearSelect.value = String(currentYear);
-      } else {
-        analyticsYearSelect.value = String(years[0]);
-      }
-    }
-
-    btnRefreshAnalytics.addEventListener("click", () => {
-      refreshAnalytics();
-      refreshExpiryWatch();
-    });
-
-    btnToggleAnalytics.addEventListener("click", () => {
-      const collapsed = analyticsBody.classList.toggle("hidden");
-      btnToggleAnalytics.textContent = collapsed ? "Show" : "Hide";
-    });
-
-    async function loadLeaveAllowances(year) {
-      leaveAllowancesByName = {};
-      currentAnalyticsYear = year;
-
-      const { data, error } = await supabase
-        .from("leave_allowances")
-        .select("id, staff_name, year, al_allowance, cl_base_allowance")
-        .eq("year", year);
-
-      if (error) {
-        console.error("loadLeaveAllowances error", error);
-        return;
-      }
-
-      (data || []).forEach((row) => {
-        const name = row.staff_name.trim();
-        leaveAllowancesByName[name] = {
-          id: row.id,
-          al: row.al_allowance || 0,
-          clBase: row.cl_base_allowance || 0
-        };
-      });
-    }
-
-    async function refreshAnalytics() {
-      const year = analyticsYearSelect.value;
-      if (!year) {
-        analyticsWeeklyTbody.innerHTML = "";
-        analyticsUsageTbody.innerHTML = "";
-        analyticsLeaveTbody.innerHTML = "";
-        return;
-      }
-
-      await loadLeaveAllowances(Number(year));
-
-      const start = `${year}-01-01`;
-      const end = `${year}-12-31`;
-
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .select("id, week_ending, label, data")
-        .gte("week_ending", start)
-        .lte("week_ending", end)
-        .order("week_ending", { ascending: true });
-
-      if (error) {
-        console.error("refreshAnalytics error", error);
-        return;
-      }
-
-      const { weeklyStats, usageStats, leaveStats } = computeAnalyticsFromWeeks(data || [], leaveAllowancesByName);
-      renderWeeklyAnalytics(weeklyStats);
-      lastUsageStats = usageStats;
-      applyUsageFilter();
-      renderLeaveAnalytics(leaveStats);
-    }
-
-    function computeAnalyticsFromWeeks(weeks, allowancesMap) {
-      const weeklyStats = [];
-      const usageMap = {};
-      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-      weeks.forEach((w) => {
-        let weekAL = 0;
-        let weekCL = 0;
-        let weekSick = 0;
-        let weekRDWTotal = 0;
-        let weekRDWSun = 0;
-        let weekUncovered = 0;
-
-        const struct = w.data;
-        if (!struct || !Array.isArray(struct.sections)) return;
-
-        struct.sections.forEach((section) => {
-          ensureUncovered(section);
-
-          // Uncovered
-          days.forEach((day) => {
-            const u = section.uncovered?.[day];
-
-            if (typeof u === "string") {
-              if (u.trim()) weekUncovered += 1;
-            } else if (u && typeof u === "object") {
-              if ((u.s1 || "").trim()) weekUncovered += 1;
-              if ((u.s2 || "").trim()) weekUncovered += 1;
-            }
-          });
-
-          // Staff rows
-          (section.rows || []).forEach((row) => {
-            const staffName = (row.staff_name || "").trim();
-            if (staffName && !usageMap[staffName]) {
-              usageMap[staffName] = {
-                name: staffName,
-                al: 0,
-                cl: 0,
-                rdwTotal: 0,
-                rdwSun: 0,
-                lropEarned: [] // for expiry / dynamic CL
-              };
-            }
-
-            days.forEach((day) => {
-              const shift = row.shifts?.[day];
-              const v = (shift || "").toUpperCase();
-              if (!v) return;
-
-              const hasAL = v.includes("A/L");
-              const hasCL = v.includes("C/L");
-              const hasSick = v.includes("SICK") || v.includes("S/L");
-              const hasLROP = v.includes("LROP");
-
-              const dayDate = getDateForDay(w.week_ending, day);
-
-              if (hasAL) {
-                weekAL++;
-                if (staffName) usageMap[staffName].al++;
-              }
-              if (hasCL) {
-                weekCL++;
-                if (staffName) usageMap[staffName].cl++;
-              }
-              if (hasSick) {
-                weekSick++;
-              }
-
-              // LROP generates a comp credit (1 day)
-              if (hasLROP && staffName && dayDate) {
-                usageMap[staffName].lropEarned.push(dayDate);
-              }
-
-              const isRDW = row.rdw && row.rdw[day];
-              if (isRDW) {
-                weekRDWTotal++;
-                if (day === "sun") {
-                  weekRDWSun++;
-                }
-                if (staffName) {
-                  usageMap[staffName].rdwTotal++;
-                  if (day === "sun") {
-                    usageMap[staffName].rdwSun++;
-                  }
-                }
-              }
-            });
-          });
-        });
-
-        weeklyStats.push({
-          weekEnding: w.week_ending,
-          label: w.label || "",
-          al: weekAL,
-          cl: weekCL,
-          sick: weekSick,
-          rdwTotal: weekRDWTotal,
-          rdwSun: weekRDWSun,
-          uncovered: weekUncovered,
-        });
-      });
-
-      const usageStats = Object.values(usageMap).filter((u) => u.name);
-      usageStats.sort((a, b) => a.name.localeCompare(b.name));
-
-      // Build leave rows: used vs allowance (+ LROP-earned C/L, ignoring expiry for RAG)
-      const leaveStats = usageStats.map((u) => {
-        const base = allowancesMap[u.name] || { al: 0, clBase: 0 };
-        const alAllowance = base.al || 0;
-        const earnedCl = u.lropEarned.length || 0;
-        const clAllowance = (base.clBase || 0) + earnedCl;
-
-        const alUsed = u.al;
-        const clUsed = u.cl;
-
-        const alPct = alAllowance > 0 ? Math.round((alUsed / alAllowance) * 100) : null;
-        const clPct = clAllowance > 0 ? Math.round((clUsed / clAllowance) * 100) : null;
-
-        return {
-          name: u.name,
-          alUsed,
-          alAllowance,
-          alPct,
-          clUsed,
-          clAllowance,
-          clPct,
-          earnedCl
-        };
-      });
-
-      return { weeklyStats, usageStats, leaveStats };
-    }
-
-    function renderWeeklyAnalytics(rows) {
-      analyticsWeeklyTbody.innerHTML = "";
-      if (!rows.length) return;
-
-      rows.forEach((r) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${formatUK(r.weekEnding)}</td>
-          <td>${r.al}</td>
-          <td>${r.cl}</td>
-          <td>${r.sick}</td>
-          <td>${r.rdwTotal}</td>
-          <td>${r.rdwSun}</td>
-          <td>${r.uncovered}</td>
-        `;
-        analyticsWeeklyTbody.appendChild(tr);
-      });
-    }
-
-    function renderUsageAnalytics(rows) {
-      analyticsUsageTbody.innerHTML = "";
-      if (!rows.length) return;
-
-      rows.forEach((r) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td style="text-align:left;">${r.name}</td>
-          <td>${r.al}</td>
-          <td>${r.cl}</td>
-          <td>${r.rdwTotal}</td>
-          <td>${r.rdwSun}</td>
-        `;
-        analyticsUsageTbody.appendChild(tr);
-      });
-    }
-
-    function leaveRagClass(pct) {
-      if (pct === null || pct === undefined) return "";
-      if (pct > 90) return "leave-red";
-      if (pct >= 70) return "leave-amber";
-      return "leave-green";
-    }
-
-    function renderLeaveAnalytics(rows) {
-      analyticsLeaveTbody.innerHTML = "";
-      if (!rows || !rows.length) return;
-
-      const role = currentProfile?.role || "viewer";
-      const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
-
-      rows.forEach((r) => {
-        const alClass = leaveRagClass(r.alPct);
-        const clClass = leaveRagClass(r.clPct);
-
-        const tr = document.createElement("tr");
-
-        const alAllowance = r.alAllowance || 0;
-        const clAllowance = r.clAllowance || 0;
-
-        tr.innerHTML = `
-          <td style="text-align:left;">${r.name}</td>
-          <td>${r.alUsed}</td>
-          <td></td>
-          <td></td>
-          <td>${r.clUsed}</td>
-          <td></td>
-          <td></td>
-        `;
-
-        const tds = tr.querySelectorAll("td");
-
-        // A/L allowance (editable for editors)
-        const alInput = document.createElement("input");
-        alInput.type = "number";
-        alInput.min = "0";
-        alInput.value = alAllowance;
-        alInput.style.width = "4rem";
-        alInput.dataset.type = "al-allowance";
-        alInput.dataset.name = r.name;
-        if (!isEditor) alInput.disabled = true;
-        tds[2].appendChild(alInput);
-
-        // A/L %
-        if (r.alPct === null) {
-          tds[3].innerHTML = `<span class="muted" style="font-size:0.7rem;">n/a</span>`;
-        } else {
-          const span = document.createElement("span");
-          span.className = `leave-pill ${alClass}`;
-          span.textContent = `${r.alPct}%`;
-          tds[3].appendChild(span);
-        }
-
-        // C/L allowance (editable total: base + earned)
-        const clInput = document.createElement("input");
-        clInput.type = "number";
-        clInput.min = "0";
-        clInput.value = clAllowance;
-        clInput.style.width = "4rem";
-        clInput.dataset.type = "cl-allowance";
-        clInput.dataset.name = r.name;
-        clInput.dataset.earnedCl = String(r.earnedCl || 0);
-        if (!isEditor) clInput.disabled = true;
-        tds[5].appendChild(clInput);
-
-        // C/L %
-        if (r.clPct === null) {
-          tds[6].innerHTML = `<span class="muted" style="font-size:0.7rem;">n/a</span>`;
-        } else {
-          const span2 = document.createElement("span");
-          span2.className = `leave-pill ${clClass}`;
-          span2.textContent = `${r.clPct}%`;
-          tds[6].appendChild(span2);
-        }
-
-        analyticsLeaveTbody.appendChild(tr);
-      });
-    }
-
-    // Save leave allowances (A/L and base C/L) back to Supabase
-    btnSaveAllowances.addEventListener("click", async () => {
-      const role = currentProfile?.role || "viewer";
-      const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
-      if (!isEditor) {
-        alert("You do not have permission to edit allowances.");
-        return;
-      }
-
-      if (!currentAnalyticsYear) {
-        alert("No analytics year selected.");
-        return;
-      }
-
-      const rows = analyticsLeaveTbody.querySelectorAll("tr");
-      const payloads = [];
-
-      rows.forEach((tr) => {
-        const nameCell = tr.querySelector("td:first-child");
-        if (!nameCell) return;
-        const name = nameCell.textContent.trim();
-        if (!name) return;
-
-        const alInput = tr.querySelector('input[data-type="al-allowance"]');
-        const clInput = tr.querySelector('input[data-type="cl-allowance"]');
-
-        const alAllowance = alInput ? Number(alInput.value || "0") : 0;
-        const clTotalAllowance = clInput ? Number(clInput.value || "0") : 0;
-        const earnedCl = clInput ? Number(clInput.dataset.earnedCl || "0") : 0;
-
-        // base C/L = total - earned (never below 0)
-        let clBase = clTotalAllowance - earnedCl;
-        if (clBase < 0) clBase = 0;
-
-        payloads.push({
-          staff_name: name,
-          year: Number(currentAnalyticsYear),
-          al_allowance: alAllowance,
-          cl_base_allowance: clBase
-        });
-      });
-
-      if (!payloads.length) return;
-
-      leaveSaveStatus.textContent = "Saving…";
-
-      const { error } = await supabase
-        .from("leave_allowances")
-        .upsert(payloads, { onConflict: "staff_name,year" });
-
-      if (error) {
-        console.error("save allowances error", error);
-        leaveSaveStatus.textContent = "Error saving allowances.";
-        return;
-      }
-
-      leaveSaveStatus.textContent = "Allowances saved.";
-      // Reload to recalc RAGs based on new allowances
-      await refreshAnalytics();
-    });
-
-    function applyUsageFilter() {
-      const term = (usageFilterInput.value || "").trim().toLowerCase();
-      if (!term) {
-        renderUsageAnalytics(lastUsageStats);
-      } else {
-        const filtered = lastUsageStats.filter((u) =>
-          u.name.toLowerCase().includes(term)
-        );
-        renderUsageAnalytics(filtered);
-      }
-    }
-
-    usageFilterInput.addEventListener("input", applyUsageFilter);
-
-    // ===== PER-WEEK ROSTER FILTER =====
-    function applyRosterFilter() {
-      if (!rosterFilterInput) return;
-      const term = (rosterFilterInput.value || "").trim().toLowerCase();
-
-      const tables = rosterGrid.querySelectorAll("table");
-      tables.forEach((table) => {
-        const rows = table.querySelectorAll("tbody tr");
-
-        rows.forEach((tr, index) => {
-          // First row is "Uncovered shifts" – always visible
-          if (index === 0) {
-            tr.style.display = "";
-            return;
-          }
-
-          const nameInput = tr.querySelector("td:first-child input");
-          if (!nameInput) return;
-
-          const name = (nameInput.value || "").toLowerCase();
-
-          if (!term || name.includes(term)) {
-            tr.style.display = "";
-          } else {
-            tr.style.display = "none";
-          }
-        });
-      });
-    }
-
-    if (rosterFilterInput) {
-      rosterFilterInput.addEventListener("input", applyRosterFilter);
-    }
-
-    // ===== COVERAGE BANNER FOR CURRENT WEEK =====
-    function computeWeekMetrics(weekRow) {
-      const stats = { al: 0, cl: 0, sick: 0, rdwTotal: 0, rdwSun: 0, uncovered: 0 };
-      if (!weekRow || !weekRow.data || !Array.isArray(weekRow.data.sections)) return stats;
-
-      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-      weekRow.data.sections.forEach((section) => {
-        ensureUncovered(section);
-
-        // Uncovered
+        // Uncovered per day
         days.forEach((day) => {
           const u = section.uncovered?.[day];
-
           if (typeof u === "string") {
-            if (u.trim()) stats.uncovered += 1;
+            if (u.trim()) weekUncovered += 1;
           } else if (u && typeof u === "object") {
-            if ((u.s1 || "").trim()) stats.uncovered += 1;
-            if ((u.s2 || "").trim()) stats.uncovered += 1;
+            if ((u.s1 || "").trim()) weekUncovered += 1;
+            if ((u.s2 || "").trim()) weekUncovered += 1;
           }
         });
 
-        // Staff rows
         (section.rows || []).forEach((row) => {
+          const staffName = (row.staff_name || "").trim();
+          if (staffName && !usageMap[staffName]) {
+            usageMap[staffName] = {
+              name: staffName,
+              al: 0,
+              cl: 0,
+              rdwTotal: 0,
+              rdwSun: 0
+            };
+          }
+
           days.forEach((day) => {
             const shift = row.shifts?.[day];
             const v = (shift || "").toUpperCase();
@@ -2068,188 +1680,610 @@
             const hasCL = v.includes("C/L");
             const hasSick = v.includes("SICK") || v.includes("S/L");
 
-            if (hasAL) stats.al++;
-            if (hasCL) stats.cl++;
-            if (hasSick) stats.sick++;
+            if (hasAL) {
+              weekAL++;
+              if (staffName) usageMap[staffName].al++;
+            }
+            if (hasCL) {
+              weekCL++;
+              if (staffName) usageMap[staffName].cl++;
+            }
+            if (hasSick) {
+              weekSick++;
+            }
 
             const isRDW = row.rdw && row.rdw[day];
             if (isRDW) {
-              stats.rdwTotal++;
-              if (day === "sun") stats.rdwSun++;
+              weekRDWTotal++;
+              if (day === "sun") weekRDWSun++;
+              if (staffName) {
+                usageMap[staffName].rdwTotal++;
+                if (day === "sun") usageMap[staffName].rdwSun++;
+              }
             }
           });
         });
       });
 
-      return stats;
-    }
-
-    function updateCoverageBanner() {
-      if (!currentWeek) {
-        coveragePill.textContent = "Coverage: n/a";
-        coveragePill.classList.remove("cov-good", "cov-amber", "cov-red");
-        coverageSummary.textContent = "No metrics available yet.";
-        return;
-      }
-
-      const stats = computeWeekMetrics(currentWeek);
-
-      coveragePill.classList.remove("cov-good", "cov-amber", "cov-red");
-      let label = "n/a";
-      let cls = "";
-
-      if (stats.uncovered === 0) {
-        label = "Green";
-        cls = "cov-good";
-      } else if (stats.uncovered <= 4) {
-        label = "Amber";
-        cls = "cov-amber";
-      } else {
-        label = "Red";
-        cls = "cov-red";
-      }
-
-      coveragePill.textContent = `Coverage: ${label}`;
-      if (cls) coveragePill.classList.add(cls);
-
-      coverageSummary.textContent =
-        `Uncovered: ${stats.uncovered} • ` +
-        `A/L: ${stats.al} • C/L: ${stats.cl} • Sick: ${stats.sick} • ` +
-        `RDW: ${stats.rdwTotal} (Sun ${stats.rdwSun})`;
-    }
-
-    // ===== COMP LEAVE EXPIRY WATCH =====
-    async function refreshExpiryWatch() {
-      analyticsExpiryTbody.innerHTML = "";
-
-      const today = new Date();
-      const oneYearAgo = addDays(today, -365);
-
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .select("id, week_ending, data")
-        .gte("week_ending", oneYearAgo.toISOString().slice(0, 10))
-        .lte("week_ending", today.toISOString().slice(0, 10))
-        .order("week_ending", { ascending: true });
-
-      if (error) {
-        console.error("refreshExpiryWatch error", error);
-        return;
-      }
-
-      const expiryStats = computeExpiryFromWeeks(data || []);
-      renderExpiryAnalytics(expiryStats);
-    }
-
-    function computeExpiryFromWeeks(weeks) {
-      const usageMap = {};
-      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-      weeks.forEach((w) => {
-        const struct = w.data;
-        if (!struct || !Array.isArray(struct.sections)) return;
-
-        struct.sections.forEach((section) => {
-          (section.rows || []).forEach((row) => {
-            const staffName = (row.staff_name || "").trim();
-            if (!staffName) return;
-
-            if (!usageMap[staffName]) {
-              usageMap[staffName] = {
-                name: staffName,
-                lropEarned: [],
-                clUsedCount: 0
-              };
-            }
-
-            days.forEach((day) => {
-              const shift = row.shifts?.[day];
-              const v = (shift || "").toUpperCase();
-              if (!v) return;
-
-              const hasCL = v.includes("C/L");
-              const hasLROP = v.includes("LROP");
-
-              const dayDate = getDateForDay(w.week_ending, day);
-
-              if (hasCL) {
-                usageMap[staffName].clUsedCount++;
-              }
-              if (hasLROP && dayDate) {
-                usageMap[staffName].lropEarned.push(dayDate);
-              }
-            });
-          });
-        });
+      weeklyStats.push({
+        weekEnding: w.week_ending,
+        label: w.label || "",
+        al: weekAL,
+        cl: weekCL,
+        sick: weekSick,
+        rdwTotal: weekRDWTotal,
+        rdwSun: weekRDWSun,
+        uncovered: weekUncovered
       });
+    });
 
-      const today = new Date();
-      const horizon = addDays(today, COMP_EXPIRY_HORIZON_DAYS);
+    const usageStats = Object.values(usageMap).filter((u) => u.name);
+    usageStats.sort((a, b) => a.name.localeCompare(b.name));
 
-      const result = [];
+    return { weeklyStats, usageStats };
+  }
 
-      Object.values(usageMap).forEach((u) => {
-        const credits = [...u.lropEarned].sort((a, b) => a - b);
-        let remainingCredits = credits.map((d) => ({ date: d, consumed: false }));
+  // Build full LROP/C/L credit bank across ALL weeks:
+  // - each LROP = 1 credit with 1-year expiry
+  // - each C/L = spends 1 oldest valid credit (FIFO)
+  // - usable = unspent, unexpired credits as of today
+    function computeCompBankFromWeeks(weeks, today) {
+    const map = {};
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-        // Consume credits FIFO for each C/L used
-        let used = u.clUsedCount || 0;
-        for (let i = 0; i < remainingCredits.length && used > 0; i++) {
-          if (!remainingCredits[i].consumed) {
-            remainingCredits[i].consumed = true;
-            used--;
+    weeks.forEach((w) => {
+      const struct = w.data;
+      if (!struct || !Array.isArray(struct.sections)) return;
+
+      struct.sections.forEach((section) => {
+        (section.rows || []).forEach((row) => {
+          const staffName = (row.staff_name || "").trim();
+          if (!staffName) return;
+
+          if (!map[staffName]) {
+            map[staffName] = {
+              lropDates: [],
+              clUsedDates: [],
+              usable: 0,
+              usedLast365: 0
+            };
           }
-        }
 
-        // Now check unconsumed credits for upcoming expiry
-        let expiringCount = 0;
-        let firstExpiry = null;
+          days.forEach((day) => {
+            const shift = row.shifts?.[day];
+            const v = (shift || "").toUpperCase();
+            if (!v) return;
 
-        remainingCredits.forEach((c) => {
-          if (c.consumed) return;
-          const expiry = new Date(c.date.getTime());
+            const d = getDateForDay(w.week_ending, day);
+            if (!d) return;
+
+            if (v.includes("LROP")) {
+              map[staffName].lropDates.push(d);
+            }
+            if (v.includes("C/L")) {
+              map[staffName].clUsedDates.push(d);
+            }
+          });
+        });
+      });
+    });
+
+    const cutoff = addDays(today, -365);
+
+    Object.entries(map).forEach(([name, rec]) => {
+      const credits = rec.lropDates
+        .map((d) => {
+          const expiry = new Date(d.getTime());
           expiry.setFullYear(expiry.getFullYear() + 1);
+          return { date: d, expiry, consumed: false };
+        })
+        .sort((a, b) => a.date - b.date);
 
-          if (expiry >= today && expiry <= horizon) {
-            expiringCount++;
-            if (!firstExpiry || expiry < firstExpiry) {
-              firstExpiry = expiry;
-            }
-          }
-        });
+      // Total uses over all time (for FIFO burn)
+      let usesLeft = rec.clUsedDates.length;
 
-        if (expiringCount > 0) {
-          result.push({
-            name: u.name,
-            expiringCount,
-            firstExpiry
-          });
+      for (let i = 0; i < credits.length && usesLeft > 0; i++) {
+        if (!credits[i].consumed) {
+          credits[i].consumed = true;
+          usesLeft--;
+        }
+      }
+
+      // Usable credits today = unconsumed + not expired
+      const usable = credits.filter(
+        (c) => !c.consumed && c.expiry >= today
+      ).length;
+
+      rec.usable = usable < 0 ? 0 : usable;
+
+      // C/L used in last 365 days
+      rec.usedLast365 = rec.clUsedDates.filter(
+        (d) => d >= cutoff && d <= today
+      ).length;
+    });
+
+    return map;
+  }
+
+  async function refreshAnalytics() {
+    const year = analyticsYearSelect.value;
+    if (!year) {
+      analyticsWeeklyTbody.innerHTML = "";
+      analyticsUsageTbody.innerHTML = "";
+      analyticsLeaveTbody.innerHTML = "";
+      return;
+    }
+
+    await loadLeaveAllowances(Number(year));
+
+    // 1) Year-scoped stats (A/L, C/L, RDW etc. in selected calendar year)
+    const start = `${year}-01-01`;
+    const end = `${year}-12-31`;
+
+    const { data: yearWeeks, error: yearErr } = await supabase
+      .from("roster_weeks")
+      .select("id, week_ending, label, data")
+      .gte("week_ending", start)
+      .lte("week_ending", end)
+      .order("week_ending", { ascending: true });
+
+    if (yearErr) {
+      console.error("refreshAnalytics (year) error", yearErr);
+      return;
+    }
+
+    const { weeklyStats, usageStats } =
+      computeYearAnalyticsFromWeeks(yearWeeks || []);
+
+    // 2) Full-history comp bank for C/L usable balance
+    const today = new Date();
+    const { data: allWeeks, error: allErr } = await supabase
+      .from("roster_weeks")
+      .select("id, week_ending, data")
+      .order("week_ending", { ascending: true });
+
+    if (allErr) {
+      console.error("refreshAnalytics (all weeks) error", allErr);
+      return;
+    }
+
+    const compBank = computeCompBankFromWeeks(allWeeks || [], today);
+
+    // Render
+    renderWeeklyAnalytics(weeklyStats);
+    lastUsageStats = usageStats;
+    applyUsageFilter();
+    renderLeaveAnalytics(usageStats, compBank);
+  }
+
+  function renderWeeklyAnalytics(rows) {
+    analyticsWeeklyTbody.innerHTML = "";
+    if (!rows.length) return;
+
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${formatUK(r.weekEnding)}</td>
+        <td>${r.al}</td>
+        <td>${r.cl}</td>
+        <td>${r.sick}</td>
+        <td>${r.rdwTotal}</td>
+        <td>${r.rdwSun}</td>
+        <td>${r.uncovered}</td>
+      `;
+      analyticsWeeklyTbody.appendChild(tr);
+    });
+  }
+
+  function renderUsageAnalytics(rows) {
+    analyticsUsageTbody.innerHTML = "";
+    if (!rows.length) return;
+
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="text-align:left;">${r.name}</td>
+        <td>${r.al}</td>
+        <td>${r.cl}</td>
+        <td>${r.rdwTotal}</td>
+        <td>${r.rdwSun}</td>
+      `;
+      analyticsUsageTbody.appendChild(tr);
+    });
+  }
+
+  function leaveRagClass(pct) {
+    if (pct === null || pct === undefined) return "";
+    if (pct > 90) return "leave-red";
+    if (pct >= 70) return "leave-amber";
+    return "leave-green";
+  }
+
+  // Render A/L (year-based) + C/L used (year) + C/L usable balance (credit bank)
+  function renderLeaveAnalytics(usageRows, compBank) {
+    analyticsLeaveTbody.innerHTML = "";
+
+    const usageByName = {};
+    (usageRows || []).forEach((u) => {
+      usageByName[u.name] = u;
+    });
+
+    const names = new Set([
+      ...Object.keys(usageByName),
+      ...Object.keys(compBank || {})
+    ]);
+
+    if (!names.size) return;
+
+    const role = currentProfile?.role || "viewer";
+    const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
+
+    Array.from(names).sort().forEach((name) => {
+      const usage = usageByName[name] || { al: 0, cl: 0 };
+      const allowanceRow = leaveAllowancesByName[name] || { al: 0 };
+      const comp = (compBank && compBank[name]) || { usable: 0 };
+
+      // A/L: calendar-year usage vs stored allowance
+      const alUsed = usage.al || 0;
+      const alAllowance = allowanceRow.al || 0;
+      const alPct = alAllowance > 0 ? Math.round((alUsed / alAllowance) * 100) : null;
+      const alClass = leaveRagClass(alPct);
+
+      // C/L:
+      //  - clUsedRolling: C/L days used in the last 365 days
+      //  - clUsableBalance: unspent, unexpired credits as of today
+      const clUsedRolling = (comp && comp.usedLast365) || 0;
+      const clUsableBalance = (comp && comp.usable) || 0;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="text-align:left;">${name}</td>
+        <td>${alUsed}</td>
+        <td></td>
+        <td></td>
+        <td>${clUsedRolling}</td>
+        <td></td>
+      `;
+
+      const tds = tr.querySelectorAll("td");
+
+      // A/L allowance editable
+      const alInput = document.createElement("input");
+      alInput.type = "number";
+      alInput.min = "0";
+      alInput.value = alAllowance;
+      alInput.style.width = "4rem";
+      alInput.dataset.type = "al-allowance";
+      alInput.dataset.name = name;
+      if (!isEditor) alInput.disabled = true;
+      tds[2].appendChild(alInput);
+
+      // A/L %
+      if (alPct === null) {
+        tds[3].innerHTML = `<span class="muted" style="font-size:0.7rem;">n/a</span>`;
+      } else {
+        const span = document.createElement("span");
+        span.className = `leave-pill ${alClass}`;
+        span.textContent = `${alPct}%`;
+        tds[3].appendChild(span);
+      }
+
+      // C/L usable balance (read only)
+      tds[5].textContent = clUsableBalance;
+
+      analyticsLeaveTbody.appendChild(tr);
+    });
+  }
+
+  // Save A/L allowances to Supabase (C/L purely derived from LROP + usage)
+  btnSaveAllowances.addEventListener("click", async () => {
+    const role = currentProfile?.role || "viewer";
+    const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
+    if (!isEditor) {
+      alert("You do not have permission to edit allowances.");
+      return;
+    }
+
+    if (!currentAnalyticsYear) {
+      alert("No analytics year selected.");
+      return;
+    }
+
+    const rows = analyticsLeaveTbody.querySelectorAll("tr");
+    const payloads = [];
+
+    rows.forEach((tr) => {
+      const nameCell = tr.querySelector("td:first-child");
+      if (!nameCell) return;
+      const name = nameCell.textContent.trim();
+      if (!name) return;
+
+      const alInput = tr.querySelector('input[data-type="al-allowance"]');
+      const alAllowance = alInput ? Number(alInput.value || "0") : 0;
+
+      payloads.push({
+        staff_name: name,
+        year: Number(currentAnalyticsYear),
+        al_allowance: alAllowance,
+        cl_base_allowance: 0
+      });
+    });
+
+    if (!payloads.length) return;
+
+    leaveSaveStatus.textContent = "Saving…";
+
+    const { error } = await supabase
+      .from("leave_allowances")
+      .upsert(payloads, { onConflict: "staff_name,year" });
+
+    if (error) {
+      console.error("save allowances error", error);
+      leaveSaveStatus.textContent = "Error saving allowances.";
+      return;
+    }
+
+    leaveSaveStatus.textContent = "Allowances saved.";
+    await refreshAnalytics();
+  });
+
+  function applyUsageFilter() {
+    const term = (usageFilterInput.value || "").trim().toLowerCase();
+    if (!term) {
+      renderUsageAnalytics(lastUsageStats);
+    } else {
+      const filtered = lastUsageStats.filter((u) =>
+        u.name.toLowerCase().includes(term)
+      );
+      renderUsageAnalytics(filtered);
+    }
+  }
+
+  usageFilterInput.addEventListener("input", applyUsageFilter);
+
+  // ===== PER-WEEK ROSTER FILTER =====
+  function applyRosterFilter() {
+    if (!rosterFilterInput) return;
+    const term = (rosterFilterInput.value || "").trim().toLowerCase();
+
+    const tables = rosterGrid.querySelectorAll("table");
+    tables.forEach((table) => {
+      const rows = table.querySelectorAll("tbody tr");
+
+      rows.forEach((tr, index) => {
+        if (index === 0) {
+          tr.style.display = "";
+          return;
+        }
+
+        const nameInput = tr.querySelector("td:first-child input");
+        if (!nameInput) return;
+
+        const name = (nameInput.value || "").toLowerCase();
+
+        if (!term || name.includes(term)) {
+          tr.style.display = "";
+        } else {
+          tr.style.display = "none";
+        }
+      });
+    });
+  }
+
+  if (rosterFilterInput) {
+    rosterFilterInput.addEventListener("input", applyRosterFilter);
+  }
+
+  // ===== COVERAGE BANNER FOR CURRENT WEEK =====
+  function computeWeekMetrics(weekRow) {
+    const stats = { al: 0, cl: 0, sick: 0, rdwTotal: 0, rdwSun: 0, uncovered: 0 };
+    if (!weekRow || !weekRow.data || !Array.isArray(weekRow.data.sections)) return stats;
+
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    weekRow.data.sections.forEach((section) => {
+      ensureUncovered(section);
+
+      days.forEach((day) => {
+        const u = section.uncovered?.[day];
+
+        if (typeof u === "string") {
+          if (u.trim()) stats.uncovered += 1;
+        } else if (u && typeof u === "object") {
+          if ((u.s1 || "").trim()) stats.uncovered += 1;
+          if ((u.s2 || "").trim()) stats.uncovered += 1;
         }
       });
 
-      result.sort((a, b) => a.firstExpiry - b.firstExpiry || a.name.localeCompare(b.name));
-      return result;
+      (section.rows || []).forEach((row) => {
+        days.forEach((day) => {
+          const shift = row.shifts?.[day];
+          const v = (shift || "").toUpperCase();
+          if (!v) return;
+
+          const hasAL = v.includes("A/L");
+          const hasCL = v.includes("C/L");
+          const hasSick = v.includes("SICK") || v.includes("S/L");
+
+          if (hasAL) stats.al++;
+          if (hasCL) stats.cl++;
+          if (hasSick) stats.sick++;
+
+          const isRDW = row.rdw && row.rdw[day];
+          if (isRDW) {
+            stats.rdwTotal++;
+            if (day === "sun") stats.rdwSun++;
+          }
+        });
+      });
+    });
+
+    return stats;
+  }
+
+  function updateCoverageBanner() {
+    if (!currentWeek) {
+      coveragePill.textContent = "Coverage: n/a";
+      coveragePill.classList.remove("cov-good", "cov-amber", "cov-red");
+      coverageSummary.textContent = "No metrics available yet.";
+      return;
     }
 
-    function renderExpiryAnalytics(rows) {
-      analyticsExpiryTbody.innerHTML = "";
-      if (!rows.length) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="3" class="muted">No comp leave credits nearing expiry.</td>`;
-        analyticsExpiryTbody.appendChild(tr);
-        return;
+    const stats = computeWeekMetrics(currentWeek);
+
+    coveragePill.classList.remove("cov-good", "cov-amber", "cov-red");
+    let label = "n/a";
+    let cls = "";
+
+    if (stats.uncovered === 0) {
+      label = "Green";
+      cls = "cov-good";
+    } else if (stats.uncovered <= 4) {
+      label = "Amber";
+      cls = "cov-amber";
+    } else {
+      label = "Red";
+      cls = "cov-red";
+    }
+
+    coveragePill.textContent = `Coverage: ${label}`;
+    if (cls) coveragePill.classList.add(cls);
+
+    coverageSummary.textContent =
+      `Uncovered: ${stats.uncovered} • ` +
+      `A/L: ${stats.al} • C/L: ${stats.cl} • Sick: ${stats.sick} • ` +
+      `RDW: ${stats.rdwTotal} (Sun ${stats.rdwSun})`;
+  }
+
+  // ===== COMP LEAVE EXPIRY WATCH (unchanged logic) =====
+  async function refreshExpiryWatch() {
+    analyticsExpiryTbody.innerHTML = "";
+
+    const today = new Date();
+    const oneYearAgo = addDays(today, -365);
+
+    const { data, error } = await supabase
+      .from("roster_weeks")
+      .select("id, week_ending, data")
+      .gte("week_ending", oneYearAgo.toISOString().slice(0, 10))
+      .lte("week_ending", today.toISOString().slice(0, 10))
+      .order("week_ending", { ascending: true });
+
+    if (error) {
+      console.error("refreshExpiryWatch error", error);
+      return;
+    }
+
+    const expiryStats = computeExpiryFromWeeks(data || []);
+    renderExpiryAnalytics(expiryStats);
+  }
+
+  function computeExpiryFromWeeks(weeks) {
+    const usageMap = {};
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+    weeks.forEach((w) => {
+      const struct = w.data;
+      if (!struct || !Array.isArray(struct.sections)) return;
+
+      struct.sections.forEach((section) => {
+        (section.rows || []).forEach((row) => {
+          const staffName = (row.staff_name || "").trim();
+          if (!staffName) return;
+
+          if (!usageMap[staffName]) {
+            usageMap[staffName] = {
+              name: staffName,
+              lropEarned: [],
+              clUsedCount: 0
+            };
+          }
+
+          days.forEach((day) => {
+            const shift = row.shifts?.[day];
+            const v = (shift || "").toUpperCase();
+            if (!v) return;
+
+            const hasCL = v.includes("C/L");
+            const hasLROP = v.includes("LROP");
+
+            const dayDate = getDateForDay(w.week_ending, day);
+
+            if (hasCL) {
+              usageMap[staffName].clUsedCount++;
+            }
+            if (hasLROP && dayDate) {
+              usageMap[staffName].lropEarned.push(dayDate);
+            }
+          });
+        });
+      });
+    });
+
+    const today = new Date();
+    const horizon = addDays(today, COMP_EXPIRY_HORIZON_DAYS);
+
+    const result = [];
+
+    Object.values(usageMap).forEach((u) => {
+      const credits = [...u.lropEarned].sort((a, b) => a - b);
+      let remainingCredits = credits.map((d) => ({ date: d, consumed: false }));
+
+      let used = u.clUsedCount || 0;
+      for (let i = 0; i < remainingCredits.length && used > 0; i++) {
+        if (!remainingCredits[i].consumed) {
+          remainingCredits[i].consumed = true;
+          used--;
+        }
       }
 
-      rows.forEach((r) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td style="text-align:left;">${r.name}</td>
-          <td>${r.expiringCount}</td>
-          <td>${formatUK(r.firstExpiry.toISOString())}</td>
-        `;
-        analyticsExpiryTbody.appendChild(tr);
+      let expiringCount = 0;
+      let firstExpiry = null;
+
+      remainingCredits.forEach((c) => {
+        if (c.consumed) return;
+        const expiry = new Date(c.date.getTime());
+        expiry.setFullYear(expiry.getFullYear() + 1);
+
+        if (expiry >= today && expiry <= horizon) {
+          expiringCount++;
+          if (!firstExpiry || expiry < firstExpiry) {
+            firstExpiry = expiry;
+          }
+        }
       });
+
+      if (expiringCount > 0) {
+        result.push({
+          name: u.name,
+          expiringCount,
+          firstExpiry
+        });
+      }
+    });
+
+    result.sort((a, b) => a.firstExpiry - b.firstExpiry || a.name.localeCompare(b.name));
+    return result;
+  }
+
+  function renderExpiryAnalytics(rows) {
+    analyticsExpiryTbody.innerHTML = "";
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td colspan="3" class="muted">No comp leave credits nearing expiry.</td>`;
+      analyticsExpiryTbody.appendChild(tr);
+      return;
     }
-  </script>
+
+    rows.forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td style="text-align:left;">${r.name}</td>
+        <td>${r.expiringCount}</td>
+        <td>${formatUK(r.firstExpiry.toISOString())}</td>
+      `;
+      analyticsExpiryTbody.appendChild(tr);
+    });
+  }
+</script>
 </body>
 </html>
