@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head>
+head>
   <meta charset="UTF-8" />
   <title>Control Roster</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -103,6 +103,13 @@
       font-size: 0.7rem;
     }
 
+    /* Tag tray buttons */
+    .tag-tray-btn-active {
+      background: #1f2937;
+      color: #f9fafb;
+      border-color: #111827;
+    }
+
     /* ===== Inputs & selects ===== */
     input, select, textarea {
       background: #f3f4f6;
@@ -133,6 +140,7 @@
       border: 1px solid #b8bfc9;
       padding: 0.3rem 0.4rem;
       text-align: center;
+      vertical-align: top;
     }
     thead {
       background: #d3d7e0; /* a shade darker than before */
@@ -242,8 +250,9 @@
     /* ===== Shift cell layout ===== */
     .shift-cell-wrap {
       display: flex;
-      align-items: center;
-      gap: 0.2rem;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.3rem; /* increased gap for more room under shifts */
     }
 
     .shift-input {
@@ -255,23 +264,63 @@
       font-size: 0.8rem;
     }
 
-    /* RDW pill – below cell, blue when active */
-    .rdw-toggle {
-      margin-top: 0.15rem;
+    /* Tag row under each shift */
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.15rem;
+    }
+    .tag-pill {
+      display: inline-flex;
+      align-items: center;
       border-radius: 999px;
-      border: 1px solid #cbd5e1;
       padding: 0.05rem 0.35rem;
       font-size: 0.6rem;
+      border: 1px solid #cbd5e1;
       background: #f3f4f6;
       color: #475569;
-      cursor: pointer;
       white-space: nowrap;
     }
-    .rdw-toggle.rdw-active {
+    .tag-pill-rdw {
       background: #2c2cd9;
       border-color: #2c2cd9;
       color: #ffffff;
       font-weight: 700;
+    }
+    .tag-pill-al {
+      background: #ff0000;
+      border-color: #b91c1c;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .tag-pill-cl {
+      background: #f97316;
+      border-color: #ea580c;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .tag-pill-sick {
+      background: #4d7c0f;
+      border-color: #3f6212;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .tag-pill-bo {
+      background: #991b1b;
+      border-color: #7f1d1d;
+      color: #ffffff;
+      font-weight: 700;
+    }
+    .tag-pill-rop {
+      background: #c4b5fd;
+      border-color: #a855f7;
+      color: #312e81;
+      font-weight: 700;
+    }
+    .tag-pill-hgd {
+      background: #e5e7eb;
+      border-color: #9ca3af;
+      color: #111827;
     }
 
     /* ===== Conditional formatting ===== */
@@ -520,18 +569,18 @@
       }
 
       .roster-grid table.roster-table th:nth-child(2),
-      .roster-grid table.roster-table td:nth-child(2),
       .roster-grid table.roster-table th:nth-child(3),
-      .roster-grid table.roster-table td:nth-child(3),
       .roster-grid table.roster-table th:nth-child(4),
-      .roster-grid table.roster-table td:nth-child(4),
       .roster-grid table.roster-table th:nth-child(5),
-      .roster-grid table.roster-table td:nth-child(5),
       .roster-grid table.roster-table th:nth-child(6),
-      .roster-grid table.roster-table td:nth-child(6),
       .roster-grid table.roster-table th:nth-child(7),
-      .roster-grid table.roster-table td:nth-child(7),
       .roster-grid table.roster-table th:nth-child(8),
+      .roster-grid table.roster-table td:nth-child(2),
+      .roster-grid table.roster-table td:nth-child(3),
+      .roster-grid table.roster-table td:nth-child(4),
+      .roster-grid table.roster-table td:nth-child(5),
+      .roster-grid table.roster-table td:nth-child(6),
+      .roster-grid table.roster-table td:nth-child(7),
       .roster-grid table.roster-table td:nth-child(8) {
         width: 52px;
       }
@@ -843,6 +892,20 @@
           </div>
         </div>
 
+        <!-- Tag tray (admin only) -->
+        <div id="tag-tray" class="mt-2 no-print flex" style="align-items:center;flex-wrap:wrap;">
+          <span class="muted" style="font-size:0.75rem;">Tag mode:</span>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="RDW">RDW</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="AL">A/L</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="CL">C/L</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="LROP">LROP</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="HROP">HROP</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="BO">B.O</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="SICK">Sick</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="HGD">HGD</button>
+          <button type="button" class="btn btn-sm tag-tray-btn" data-tag="CLEAR">Clear tags</button>
+        </div>
+
         <div class="mt-2 roster-grid" id="roster-grid"></div>
       </div>
     </div>
@@ -878,6 +941,9 @@
     let leaveAllowancesByName = {};
     const COMP_EXPIRY_HORIZON_DAYS = 60;
 
+    // Active tag from the tray (e.g. "AL", "RDW", "CLEAR")
+    let activeTag = null;
+
     // ===== Date helpers =====
     function formatUK(dateStr) {
       if (!dateStr) return "";
@@ -893,6 +959,11 @@
       const d = new Date(date.getTime());
       d.setDate(d.getDate() + days);
       return d;
+    }
+
+    function isEffectiveReadOnly() {
+      const role = currentProfile?.role || "viewer";
+      return isPublicViewer || role === "viewer" || forceReadOnly;
     }
 
     // Given week-ending date and day key, get actual Date (week ending = Saturday)
@@ -957,9 +1028,17 @@
     const coveragePill = document.getElementById("coverage-pill");
     const coverageSummary = document.getElementById("coverage-summary");
 
+    const tagTray = document.getElementById("tag-tray");
+
+    function syncTagTrayVisibility() {
+      if (!tagTray) return;
+      tagTray.style.display = isEffectiveReadOnly() ? "none" : "flex";
+    }
+
     if (readonlyToggle) {
       readonlyToggle.addEventListener("change", () => {
         forceReadOnly = !!readonlyToggle.checked;
+        syncTagTrayVisibility();
         if (currentWeek) {
           renderRosterGrid(currentWeek.data);
         }
@@ -1016,6 +1095,8 @@
       newWeekTemplateSelect.disabled = true;
       btnCreateWeek.disabled = true;
 
+      syncTagTrayVisibility();
+
       await loadTemplates();
       await loadWeeks();
       await loadAnalyticsYears();
@@ -1050,6 +1131,8 @@
       newWeekTemplateSelect.disabled = false;
       btnCreateWeek.disabled = !(role === "editor" || role === "admin");
 
+      syncTagTrayVisibility();
+
       await loadTemplates();
       await loadWeeks();
       await loadAnalyticsYears();
@@ -1063,8 +1146,29 @@
         currentUser = data.session.user;
         await loadProfile();
         await postLoginInit();
+      } else {
+        syncTagTrayVisibility();
       }
     })();
+
+    // Tag tray behaviour
+    if (tagTray) {
+      const trayButtons = tagTray.querySelectorAll(".tag-tray-btn");
+      trayButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          if (isEffectiveReadOnly()) return;
+          const tag = btn.dataset.tag || null;
+          if (activeTag === tag) {
+            activeTag = null;
+            trayButtons.forEach((b) => b.classList.remove("tag-tray-btn-active"));
+          } else {
+            activeTag = tag;
+            trayButtons.forEach((b) => b.classList.remove("tag-tray-btn-active"));
+            btn.classList.add("tag-tray-btn-active");
+          }
+        });
+      });
+    }
 
     // ===== TEMPLATES =====
     async function loadTemplates() {
@@ -1222,6 +1326,16 @@
       });
     }
 
+    function ensureRowTags(row) {
+      if (!row.tags) row.tags = {};
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      days.forEach((day) => {
+        if (!Array.isArray(row.tags[day])) {
+          row.tags[day] = [];
+        }
+      });
+    }
+
     async function openWeek(weekRow) {
       currentWeek = weekRow;
       ensureSpareOrigin(currentWeek.data);
@@ -1230,6 +1344,7 @@
       editorTitle.textContent = `Week ending ${formatUK(weekRow.week_ending)}`;
       editorSubtitle.textContent = weekRow.label || "";
       setStatusPill(weekRow.status);
+      syncTagTrayVisibility();
       renderRosterGrid(weekRow.data);
       syncEditorButtons();
       updateCoverageBanner();
@@ -1259,12 +1374,14 @@
     }
 
     // ===== CLASSIFY SHIFTS =====
-    function classifyShift(value) {
+    function classifyShift(value, tags) {
       const classes = [];
-      if (!value) return "";
+      const v = (value || "").trim().toUpperCase();
+      const tagSet = new Set((tags || []).map((t) => String(t).toUpperCase()));
 
-      const v = String(value).trim().toUpperCase();
+      if (!v && tagSet.size === 0) return "";
 
+      // Base on times / text
       if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
         classes.push("shift-day");
       }
@@ -1277,24 +1394,22 @@
       if (v === "N/A") {
         classes.push("shift-oo");
       }
-      if (v.includes("A/L")) {
-        classes.push("shift-al");
-      }
-      if (v.includes("C/L")) {
-        classes.push("shift-cl");
-      }
-      if (v.includes("SICK") || v.includes("S/L")) {
-        classes.push("shift-sick");
-      }
       if (v === "RD") {
         classes.push("shift-rd");
       }
-      if (v.includes("B.O")) {
-        classes.push("shift-al");
-      }
-      if (v.includes("LROP") || v.includes("HROP")) {
-        classes.push("shift-rop");
-      }
+
+      // Based on tags OR legacy text markers
+      const hasAL = tagSet.has("AL") || v.includes("A/L");
+      const hasCL = tagSet.has("CL") || v.includes("C/L");
+      const hasSick = tagSet.has("SICK") || v.includes("SICK") || v.includes("S/L");
+      const hasBO = tagSet.has("BO") || v.includes("B.O");
+      const hasRop = tagSet.has("LROP") || tagSet.has("HROP") || v.includes("LROP") || v.includes("HROP");
+
+      if (hasAL) classes.push("shift-al");
+      if (hasCL) classes.push("shift-cl");
+      if (hasSick) classes.push("shift-sick");
+      if (hasBO) classes.push("shift-bo");
+      if (hasRop) classes.push("shift-rop");
 
       return classes.join(" ");
     }
@@ -1341,6 +1456,53 @@
       return diffDays >= 0 && diffDays <= 6;
     }
 
+    // Apply a tag from the tray to a single cell
+    function applyTagToCell(sectionId, rowIndex, dayKey) {
+      if (!currentWeek || !activeTag) return;
+      if (isEffectiveReadOnly()) return;
+
+      const sections = currentWeek.data.sections || [];
+      const section = sections.find((s) => s.id === sectionId);
+      if (!section) return;
+      if (!section.rows || !section.rows[rowIndex]) return;
+
+      const row = section.rows[rowIndex];
+      ensureRowTags(row);
+
+      const tags = row.tags[dayKey] || [];
+      const tagUpper = activeTag.toUpperCase();
+
+      // CLEAR mode: remove all tags from this cell + reset RDW flag
+      if (tagUpper === "CLEAR") {
+        row.tags[dayKey] = [];
+        if (row.rdw && Object.prototype.hasOwnProperty.call(row.rdw, dayKey)) {
+          row.rdw[dayKey] = false;
+        }
+      } else {
+        const existingIndex = tags.findIndex((t) => String(t).toUpperCase() === tagUpper);
+        if (existingIndex >= 0) {
+          // Remove tag
+          tags.splice(existingIndex, 1);
+          row.tags[dayKey] = tags;
+          if (tagUpper === "RDW") {
+            if (!row.rdw) row.rdw = {};
+            row.rdw[dayKey] = false;
+          }
+        } else {
+          // Add tag
+          tags.push(tagUpper);
+          row.tags[dayKey] = tags;
+          if (tagUpper === "RDW") {
+            if (!row.rdw) row.rdw = {};
+            row.rdw[dayKey] = true;
+          }
+        }
+      }
+
+      renderRosterGrid(currentWeek.data);
+      updateCoverageBanner();
+    }
+
     // ===== ROSTER RENDERING =====
     function renderRosterGrid(data) {
       rosterGrid.innerHTML = "";
@@ -1350,9 +1512,7 @@
         return;
       }
 
-      const role = currentProfile?.role || "viewer";
-      const baseReadOnly = isPublicViewer || role === "viewer";
-      const effectiveReadOnly = baseReadOnly || forceReadOnly;
+      const effectiveReadOnly = isEffectiveReadOnly();
 
       data.sections.forEach((section) => {
         ensureUncovered(section);
@@ -1427,7 +1587,7 @@
             input.dataset.sectionId = section.id;
             input.dataset.day = day;
             input.dataset.slot = slot;
-            input.className = "shift-input " + classifyShift(input.value);
+            input.className = "shift-input " + classifyShift(input.value, []);
             input.style.display = "block";
             input.style.marginBottom = "2px";
 
@@ -1451,6 +1611,8 @@
 
         // Staff rows
         (section.rows || []).forEach((row, rowIndex) => {
+          ensureRowTags(row);
+
           const tr = document.createElement("tr");
 
           function makeCell(key) {
@@ -1463,52 +1625,65 @@
             const wrap = document.createElement("div");
             wrap.className = "shift-cell-wrap";
 
+            const shiftValue = row.shifts?.[key] || "";
+
+            // Build tag list for this cell
+            let tags = Array.isArray(row.tags?.[key]) ? [...row.tags[key]] : [];
+            // Backward compat: if RDW flag set but tag missing, inject it for display
+            if (row.rdw && row.rdw[key]) {
+              const hasRdwTag = tags.some((t) => String(t).toUpperCase() === "RDW");
+              if (!hasRdwTag) tags.push("RDW");
+            }
+
             const input = document.createElement("input");
-            input.value = row.shifts?.[key] || "";
+            input.value = shiftValue;
             input.dataset.sectionId = section.id;
             input.dataset.rowIndex = rowIndex;
             input.dataset.field = key;
-            input.className = "shift-input " + classifyShift(input.value);
+            input.className = "shift-input " + classifyShift(shiftValue, tags);
             input.setAttribute("list", "shift-presets");
-
-            const rdwBtn = document.createElement("button");
-            rdwBtn.type = "button";
-            rdwBtn.textContent = "RDW";
-            rdwBtn.className = "rdw-toggle";
-
-            const rdwActive = row.rdw && row.rdw[key];
-            if (rdwActive) {
-              rdwBtn.classList.add("rdw-active");
-            }
 
             if (effectiveReadOnly) {
               input.disabled = true;
-              rdwBtn.disabled = true;
             } else {
               input.addEventListener("input", handleShiftChange);
             }
 
             wrap.appendChild(input);
+
+            // Tag pills under shift
+            const tagRow = document.createElement("div");
+            tagRow.className = "tag-row";
+
+            tags.forEach((tag) => {
+              const tUpper = String(tag).toUpperCase();
+              const pill = document.createElement("span");
+              pill.classList.add("tag-pill");
+
+              if (tUpper === "RDW") pill.classList.add("tag-pill-rdw");
+              else if (tUpper === "AL") pill.classList.add("tag-pill-al");
+              else if (tUpper === "CL") pill.classList.add("tag-pill-cl");
+              else if (tUpper === "SICK") pill.classList.add("tag-pill-sick");
+              else if (tUpper === "BO") pill.classList.add("tag-pill-bo");
+              else if (tUpper === "LROP" || tUpper === "HROP") pill.classList.add("tag-pill-rop");
+              else if (tUpper === "HGD") pill.classList.add("tag-pill-hgd");
+
+              pill.textContent = tUpper;
+              tagRow.appendChild(pill);
+            });
+
+            wrap.appendChild(tagRow);
             td.appendChild(wrap);
 
-            // RDW placement: below shift, visibility rules
-            if (effectiveReadOnly) {
-              if (rdwActive) {
-                td.appendChild(rdwBtn);
-              }
-            } else {
-              rdwBtn.addEventListener("click", () => {
-                const sections = currentWeek.data.sections || [];
-                const sec = sections.find((s) => s.id === section.id);
-                if (!sec) return;
-                if (!sec.rows[rowIndex]) sec.rows[rowIndex] = {};
-                if (!sec.rows[rowIndex].rdw) sec.rows[rowIndex].rdw = {};
-                const current = !!sec.rows[rowIndex].rdw[key];
-                const next = !current;
-                sec.rows[rowIndex].rdw[key] = next;
-                rdwBtn.classList.toggle("rdw-active", next);
+            // Apply tag from tray on cell click (but not when clicking the input or pills directly)
+            if (!effectiveReadOnly) {
+              td.addEventListener("click", (e) => {
+                const targetTag = e.target;
+                if (targetTag.tagName && targetTag.tagName.toLowerCase() === "input") return;
+                if (targetTag.classList && targetTag.classList.contains("tag-pill")) return;
+                if (!activeTag) return;
+                applyTagToCell(section.id, rowIndex, key);
               });
-              td.appendChild(rdwBtn);
             }
 
             return td;
@@ -1580,8 +1755,8 @@
           }
 
           const bodyRows = tbody.querySelectorAll("tr");
-          bodyRows.forEach((row) => {
-            const cells = row.querySelectorAll("td");
+          bodyRows.forEach((rowEl) => {
+            const cells = rowEl.querySelectorAll("td");
             if (cells[dayIndex + 1]) {
               cells[dayIndex + 1].classList.add("today-col");
             }
@@ -1597,8 +1772,7 @@
 
     // ===== CHANGE HANDLERS =====
     function handleUncoveredChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
+      if (isEffectiveReadOnly()) return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -1614,13 +1788,12 @@
       if (!dayObj) return;
 
       dayObj[slot] = input.value;
-      input.className = "shift-input " + classifyShift(input.value);
+      input.className = "shift-input " + classifyShift(input.value, []);
       updateCoverageBanner();
     }
 
     function handleNameChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
+      if (isEffectiveReadOnly()) return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -1635,8 +1808,7 @@
     }
 
     function handleRemarksChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
+      if (isEffectiveReadOnly()) return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -1651,8 +1823,7 @@
     }
 
     function handleShiftChange(e) {
-      const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || role === "viewer") return;
+      if (isEffectiveReadOnly()) return;
 
       const input = e.target;
       const sectionId = input.dataset.sectionId;
@@ -1665,9 +1836,12 @@
 
       if (!section.rows[rowIndex]) section.rows[rowIndex] = { shifts: {} };
       if (!section.rows[rowIndex].shifts) section.rows[rowIndex].shifts = {};
+      if (!section.rows[rowIndex].tags) section.rows[rowIndex].tags = {};
+
       section.rows[rowIndex].shifts[field] = input.value;
 
-      input.className = "shift-input " + classifyShift(input.value);
+      const tags = section.rows[rowIndex].tags[field] || [];
+      input.className = "shift-input " + classifyShift(input.value, tags);
       updateCoverageBanner();
     }
 
@@ -1857,11 +2031,14 @@
             days.forEach((day) => {
               const shift = row.shifts?.[day];
               const v = (shift || "").toUpperCase();
-              if (!v) return;
+              const tags = Array.isArray(row.tags?.[day]) ? row.tags[day] : [];
+              const tagSet = new Set(tags.map((t) => String(t).toUpperCase()));
 
-              const hasAL = v.includes("A/L");
-              const hasCL = v.includes("C/L");
-              const hasSick = v.includes("SICK") || v.includes("S/L");
+              if (!v && tagSet.size === 0) return;
+
+              const hasAL = tagSet.has("AL") || v.includes("A/L");
+              const hasCL = tagSet.has("CL") || v.includes("C/L");
+              const hasSick = tagSet.has("SICK") || v.includes("SICK") || v.includes("S/L");
 
               if (hasAL) {
                 weekAL++;
@@ -1930,14 +2107,21 @@
             days.forEach((day) => {
               const shift = row.shifts?.[day];
               const v = (shift || "").toUpperCase();
-              if (!v) return;
+              const tags = Array.isArray(row.tags?.[day]) ? row.tags[day] : [];
+              const tagSet = new Set(tags.map((t) => String(t).toUpperCase()));
+
+              if (!v && tagSet.size === 0) return;
+
               const d = getDateForDay(w.week_ending, day);
               if (!d || d.getFullYear() !== year) return;
 
-              if (v.includes("A/L")) {
+              const hasAL = tagSet.has("AL") || v.includes("A/L");
+              const hasCL = tagSet.has("CL") || v.includes("C/L");
+
+              if (hasAL) {
                 map[staffName].alDates.push(d);
               }
-              if (v.includes("C/L")) {
+              if (hasCL) {
                 map[staffName].clDates.push(d);
               }
             });
@@ -1975,15 +2159,20 @@
             days.forEach((day) => {
               const shift = row.shifts?.[day];
               const v = (shift || "").toUpperCase();
-              if (!v) return;
+              const tags = Array.isArray(row.tags?.[day]) ? row.tags[day] : [];
+              const tagSet = new Set(tags.map((t) => String(t).toUpperCase()));
+              if (!v && tagSet.size === 0) return;
 
               const d = getDateForDay(w.week_ending, day);
               if (!d) return;
 
-              if (v.includes("LROP")) {
+              const hasCL = tagSet.has("CL") || v.includes("C/L");
+              const hasLROP = tagSet.has("LROP") || v.includes("LROP");
+
+              if (hasLROP) {
                 map[staffName].lropDates.push(d);
               }
-              if (v.includes("C/L")) {
+              if (hasCL) {
                 map[staffName].clUsedDates.push(d);
               }
             });
@@ -2408,11 +2597,14 @@
           days.forEach((day) => {
             const shift = row.shifts?.[day];
             const v = (shift || "").toUpperCase();
-            if (!v) return;
+            const tags = Array.isArray(row.tags?.[day]) ? row.tags[day] : [];
+            const tagSet = new Set(tags.map((t) => String(t).toUpperCase()));
 
-            const hasAL = v.includes("A/L");
-            const hasCL = v.includes("C/L");
-            const hasSick = v.includes("SICK") || v.includes("S/L");
+            if (!v && tagSet.size === 0) return;
+
+            const hasAL = tagSet.has("AL") || v.includes("A/L");
+            const hasCL = tagSet.has("CL") || v.includes("C/L");
+            const hasSick = tagSet.has("SICK") || v.includes("SICK") || v.includes("S/L");
 
             if (hasAL) stats.al++;
             if (hasCL) stats.cl++;
@@ -2511,10 +2703,12 @@
             days.forEach((day) => {
               const shift = row.shifts?.[day];
               const v = (shift || "").toUpperCase();
-              if (!v) return;
+              const tags = Array.isArray(row.tags?.[day]) ? row.tags[day] : [];
+              const tagSet = new Set(tags.map((t) => String(t).toUpperCase()));
+              if (!v && tagSet.size === 0) return;
 
-              const hasCL = v.includes("C/L");
-              const hasLROP = v.includes("LROP");
+              const hasCL = tagSet.has("CL") || v.includes("C/L");
+              const hasLROP = tagSet.has("LROP") || v.includes("LROP");
 
               const dayDate = getDateForDay(w.week_ending, day);
 
