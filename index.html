@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-head>
+<head>
   <meta charset="UTF-8" />
   <title>Control Roster</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -831,6 +831,42 @@ head>
             </table>
           </div>
         </div>
+
+      <!-- Shift market -->
+      <div id="shift-market-card" class="card no-print">
+        <div class="flex-between">
+          <div>
+            <h2>Shift market</h2>
+            <p class="muted">
+              Uncovered published shifts from the current week onwards. Staff can register interest;
+              rankings are based on RDW usage (Sunday RDW if the shift is on a Sunday).
+            </p>
+          </div>
+          <div class="flex">
+            <button id="btn-toggle-shift-market" class="btn btn-sm">Show</button>
+          </div>
+        </div>
+        <div id="shift-market-body" class="hidden mt-2">
+          <p class="muted mb-1">
+            Each row is an uncovered slot from a published roster. Use the selector to register interest
+            against your name. Rankings are not an allocation decision, just a transparent view.
+          </p>
+          <div class="table-scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>Week ending</th>
+                  <th>Date</th>
+                  <th>Section</th>
+                  <th>Shift</th>
+                  <th>Interest</th>
+                </tr>
+              </thead>
+              <tbody id="shift-market-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       </div>
 
       <!-- Roster editor -->
@@ -1031,6 +1067,11 @@ head>
 
     const tagTray = document.getElementById("tag-tray");
 
+    const shiftMarketCard = document.getElementById("shift-market-card");
+    const shiftMarketBody = document.getElementById("shift-market-body");
+    const shiftMarketTbody = document.getElementById("shift-market-tbody");
+    const btnToggleShiftMarket = document.getElementById("btn-toggle-shift-market");
+
     function syncTagTrayVisibility() {
       if (!tagTray) return;
       tagTray.style.display = isEffectiveReadOnly() ? "none" : "flex";
@@ -1049,6 +1090,16 @@ head>
     // Default analytics collapsed
     analyticsBody.classList.add("hidden");
     btnToggleAnalytics.textContent = "Show";
+
+    // Default shift market collapsed
+    if (shiftMarketBody && btnToggleShiftMarket) {
+      shiftMarketBody.classList.add("hidden");
+      btnToggleShiftMarket.textContent = "Show";
+      btnToggleShiftMarket.addEventListener("click", () => {
+        const collapsed = shiftMarketBody.classList.toggle("hidden");
+        btnToggleShiftMarket.textContent = collapsed ? "Show" : "Hide";
+      });
+    }
 
     // ===== AUTH =====
     authForm.addEventListener("submit", async (e) => {
@@ -1103,6 +1154,7 @@ head>
       await loadAnalyticsYears();
       await refreshAnalytics();
       await refreshExpiryWatch();
+      await refreshShiftMarket();
     });
 
     async function loadProfile() {
@@ -1150,6 +1202,7 @@ head>
   await loadAnalyticsYears();
   await refreshAnalytics();
   await refreshExpiryWatch();
+  await refreshShiftMarket();
 }
 
     (async function init() {
@@ -1882,13 +1935,30 @@ head>
       const role = currentProfile?.role || "viewer";
       if (!currentWeek || isPublicViewer || role === "viewer") return;
 
+      const previousSnapshot = currentWeek.last_published_data
+        ? JSON.parse(JSON.stringify(currentWeek.last_published_data))
+        : null;
+      const isRePublish = currentWeek.status === "published" && !!previousSnapshot;
+
+      let changeLogText = "";
+      if (isRePublish && previousSnapshot) {
+        try {
+          changeLogText = buildChangeLog(previousSnapshot, currentWeek.data, currentWeek);
+        } catch (e) {
+          console.warn("buildChangeLog error", e);
+        }
+      }
+
+      const payload = {
+        status: "published",
+        published_at: new Date().toISOString(),
+        data: currentWeek.data,
+        last_published_data: currentWeek.data
+      };
+
       const { data, error } = await supabase
         .from("roster_weeks")
-        .update({
-          status: "published",
-          published_at: new Date().toISOString(),
-          data: currentWeek.data
-        })
+        .update(payload)
         .eq("id", currentWeek.id)
         .select("*")
         .single();
@@ -1906,7 +1976,34 @@ head>
       await loadAnalyticsYears();
       await refreshAnalytics();
       await refreshExpiryWatch();
-      alert("Week published.");
+      await refreshShiftMarket();
+
+      if (isRePublish && changeLogText) {
+        const wants = confirm("Week published. Generate a change log to copy into an email?");
+        if (wants) {
+          let win;
+          try {
+            win = window.open("", "_blank", "width=900,height=700");
+          } catch (e) {
+            console.warn("Unable to open window for change log", e);
+          }
+
+          if (win) {
+            const safe = changeLogText
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;");
+            win.document.write("<!doctype html><title>Roster change log</title>");
+            win.document.write("<pre style='font-family:system-ui,monospace;font-size:12px;white-space:pre-wrap;'>" + safe + "</pre>");
+            win.document.close();
+          } else {
+            console.log("Roster change log:\n" + changeLogText);
+            alert("Change log written to console (could not open a new window).");
+          }
+        }
+      } else {
+        alert("Week published.");
+      }
     });
 
     btnPrintWeek.addEventListener("click", () => {
@@ -2279,6 +2376,254 @@ head>
       renderLeaveAnalytics(usageStats, compBank, leaveDetailYear);
     }
 
+    // ===== SHIFT MARKET (uncovered shifts with interest) =====
+    let shiftMarketStaffNames = [];
+
+    function buildUsageMap() {
+      const map = {};
+      (lastUsageStats || []).forEach((u) => {
+        map[u.name] = {
+          rdwTotal: u.rdwTotal || 0,
+          rdwSun: u.rdwSun || 0
+        };
+      });
+      return map;
+    }
+
+    function dayKeyToIndex(dayKey) {
+      const order = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      return order.indexOf(dayKey);
+    }
+
+    async function refreshShiftMarket() {
+      if (!shiftMarketTbody) return;
+
+      shiftMarketTbody.innerHTML = "";
+      shiftMarketStaffNames = [];
+
+      // Only show for roster_weeks that are published and from "today" onwards.
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+
+      let weeksData = [];
+      try {
+        const { data, error } = await supabase
+          .from("roster_weeks")
+          .select("id, week_ending, label, status, data")
+          .eq("status", "published")
+          .gte("week_ending", todayStr)
+          .order("week_ending", { ascending: true });
+
+        if (error) {
+          console.warn("refreshShiftMarket roster_weeks error", error);
+          return;
+        }
+        weeksData = data || [];
+      } catch (e) {
+        console.warn("refreshShiftMarket roster_weeks exception", e);
+        return;
+      }
+
+      const entries = [];
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      weeksData.forEach((w) => {
+        if (!w.data || !Array.isArray(w.data.sections)) return;
+        w.data.sections.forEach((section) => {
+          ensureUncovered(section);
+          // collect names for dropdown
+          (section.rows || []).forEach((row) => {
+            const name = (row.staff_name || "").trim();
+            if (name && !shiftMarketStaffNames.includes(name)) {
+              shiftMarketStaffNames.push(name);
+            }
+          });
+
+          days.forEach((dayKey) => {
+            const u = section.uncovered?.[dayKey];
+            if (!u) return;
+
+            const slots = typeof u === "string"
+              ? { s1: u, s2: "" }
+              : { s1: u.s1 || "", s2: u.s2 || "" };
+
+            ["s1", "s2"].forEach((slot) => {
+              const val = (slots[slot] || "").trim();
+              if (!val) return;
+
+              const dateObj = getDateForDay(w.week_ending, dayKey);
+              entries.push({
+                weekId: w.id,
+                weekEnding: w.week_ending,
+                sectionId: section.id || null,
+                sectionTitle: section.title || "Section",
+                dayKey,
+                slot,
+                shiftText: val,
+                dateObj
+              });
+            });
+          });
+        });
+      });
+
+      shiftMarketStaffNames.sort((a, b) => a.localeCompare(b));
+
+      // Load existing interest registrations (if table exists)
+      let interestRows = [];
+      try {
+        const { data: interestData, error: interestErr } = await supabase
+          .from("shift_market_interest")
+          .select("id, week_id, section_id, day_key, slot, staff_name, created_at");
+
+        if (interestErr) {
+          console.warn("refreshShiftMarket interest error", interestErr);
+        } else {
+          interestRows = interestData || [];
+        }
+      } catch (e) {
+        console.warn("refreshShiftMarket interest exception", e);
+      }
+
+      const interestByKey = {};
+      interestRows.forEach((row) => {
+        const key = `${row.week_id}|${row.section_id || ""}|${row.day_key}|${row.slot}`;
+        if (!interestByKey[key]) interestByKey[key] = [];
+        interestByKey[key].push(row);
+      });
+
+      const usageMap = buildUsageMap();
+
+      if (!entries.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="5" class="muted">No uncovered published shifts from the current week onwards.</td>`;
+        shiftMarketTbody.appendChild(tr);
+        return;
+      }
+
+      entries.forEach((e) => {
+        const key = `${e.weekId}|${e.sectionId || ""}|${e.dayKey}|${e.slot}`;
+        const interested = (interestByKey[key] || []).slice();
+
+        const isSunday = e.dayKey === "sun";
+        interested.sort((a, b) => {
+          const ua = usageMap[a.staff_name] || { rdwTotal: 0, rdwSun: 0 };
+          const ub = usageMap[b.staff_name] || { rdwTotal: 0, rdwSun: 0 };
+          const aScore = isSunday ? ua.rdwSun : ua.rdwTotal;
+          const bScore = isSunday ? ub.rdwSun : ub.rdwTotal;
+          if (aScore !== bScore) return aScore - bScore;
+          return a.staff_name.localeCompare(b.staff_name);
+        });
+
+        const tr = document.createElement("tr");
+
+        const weekTd = document.createElement("td");
+        weekTd.textContent = formatUK(e.weekEnding);
+        tr.appendChild(weekTd);
+
+        const dateTd = document.createElement("td");
+        dateTd.textContent = e.dateObj ? formatUK(e.dateObj.toISOString()) : "";
+        tr.appendChild(dateTd);
+
+        const sectionTd = document.createElement("td");
+        sectionTd.textContent = e.sectionTitle;
+        tr.appendChild(sectionTd);
+
+        const shiftTd = document.createElement("td");
+        shiftTd.textContent = e.shiftText;
+        tr.appendChild(shiftTd);
+
+               const interestTd = document.createElement("td");
+        interestTd.style.textAlign = "left";
+
+        // Everyone (including public viewer) can register interest
+        const controlWrap = document.createElement("div");
+        controlWrap.className = "flex";
+        controlWrap.style.alignItems = "center";
+
+        const select = document.createElement("select");
+        select.className = "shift-market-name-select";
+        select.dataset.shiftKey = key;
+
+        const defaultOpt = document.createElement("option");
+        defaultOpt.value = "";
+        defaultOpt.textContent = "Select name…";
+        select.appendChild(defaultOpt);
+
+        shiftMarketStaffNames.forEach((name) => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          select.appendChild(opt);
+        });
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-sm";
+        btn.textContent = "Register";
+        btn.dataset.shiftKey = key;
+
+        btn.addEventListener("click", async () => {
+          const chosenName = select.value;
+          if (!chosenName) {
+            alert("Pick a name to register interest.");
+            return;
+          }
+
+          try {
+            const payload = {
+              week_id: e.weekId,
+              section_id: e.sectionId,
+              day_key: e.dayKey,
+              slot: e.slot,
+              staff_name: chosenName
+            };
+            const { error } = await supabase
+              .from("shift_market_interest")
+              .upsert(payload, {
+                onConflict: "week_id,section_id,day_key,slot,staff_name"
+              });
+            if (error) {
+              console.warn("Register interest error", error);
+              alert("Unable to register interest (backend).");
+              return;
+            }
+            await refreshShiftMarket();
+          } catch (err) {
+            console.warn("Register interest exception", err);
+            alert("Unable to register interest.");
+          }
+        });
+
+        controlWrap.appendChild(select);
+        controlWrap.appendChild(btn);
+        interestTd.appendChild(controlWrap);
+
+        const rankDiv = document.createElement("div");
+        rankDiv.className = "muted";
+        rankDiv.style.fontSize = "0.75rem";
+        rankDiv.style.marginTop = "0.25rem";
+
+        if (interested.length) {
+          const listStr = interested
+            .map((r) => {
+              const u = usageMap[r.staff_name] || { rdwTotal: 0, rdwSun: 0 };
+              const score = isSunday ? u.rdwSun : u.rdwTotal;
+              const label = isSunday ? `Sun RDW: ${score}` : `RDW: ${score}`;
+              return `${r.staff_name} (${label})`;
+            })
+            .join(" • ");
+          rankDiv.textContent = "Ranked interest: " + listStr;
+        } else {
+          rankDiv.textContent = "No interest registered yet.";
+        }
+
+        interestTd.appendChild(rankDiv);
+        tr.appendChild(interestTd);
+        shiftMarketTbody.appendChild(tr);
+      });
+    }
+
     function renderWeeklyAnalytics(rows) {
       analyticsWeeklyTbody.innerHTML = "";
       if (!rows.length) return;
@@ -2583,6 +2928,114 @@ head>
 
     if (rosterFilterInput) {
       rosterFilterInput.addEventListener("input", applyRosterFilter);
+    }
+
+
+    function normaliseCellTags(row, dayKey) {
+      const tagsArr = Array.isArray(row.tags?.[dayKey]) ? row.tags[dayKey] : [];
+      const set = new Set(tagsArr.map((t) => String(t).toUpperCase()));
+      if (row.rdw && row.rdw[dayKey]) {
+        set.add("RDW");
+      }
+      return Array.from(set).sort();
+    }
+
+    function describeShiftAndTags(shift, tags) {
+      const v = (shift || "").trim();
+      const t = (tags || []).filter((x) => x).join(", ");
+      if (v && t) return `${v} + ${t}`;
+      if (v) return v;
+      if (t) return t;
+      return "Empty";
+    }
+
+    function buildChangeLog(oldData, newData, weekRow) {
+      if (!oldData || !newData) return "";
+      if (!Array.isArray(oldData.sections) || !Array.isArray(newData.sections)) return "";
+
+      const lines = [];
+      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      const oldSections = oldData.sections || [];
+      const newSections = newData.sections || [];
+
+      const sectionCount = Math.max(oldSections.length, newSections.length);
+
+      for (let si = 0; si < sectionCount; si++) {
+        const oldSection = oldSections[si] || { rows: [] };
+        const newSection = newSections[si] || { rows: [] };
+
+        const oldRows = oldSection.rows || [];
+        const newRows = newSection.rows || [];
+        const rowCount = Math.max(oldRows.length, newRows.length);
+
+        for (let ri = 0; ri < rowCount; ri++) {
+          const oRow = oldRows[ri] || { shifts: {}, tags: {} };
+          const nRow = newRows[ri] || { shifts: {}, tags: {} };
+
+          const name = (nRow.staff_name || oRow.staff_name || "").trim();
+          if (!name) continue;
+
+          days.forEach((dayKey) => {
+            const oldShift = oRow.shifts?.[dayKey] || "";
+            const newShift = nRow.shifts?.[dayKey] || "";
+
+            const oldTags = normaliseCellTags(oRow, dayKey);
+            const newTags = normaliseCellTags(nRow, dayKey);
+
+            const sameShift = String(oldShift || "").trim() === String(newShift || "").trim();
+            const sameTags =
+              oldTags.length === newTags.length &&
+              oldTags.every((t, idx) => t === newTags[idx]);
+
+            if (sameShift && sameTags) return;
+
+            const d = getDateForDay(weekRow.week_ending, dayKey);
+            const dateStr = d ? formatUK(d.toISOString()) : dayKey.toUpperCase();
+
+            const fromDesc = describeShiftAndTags(oldShift, oldTags);
+            const toDesc = describeShiftAndTags(newShift, newTags);
+
+            lines.push(`- ${name} ${dateStr}: ${fromDesc} -> ${toDesc}`);
+          });
+        }
+      }
+
+      // Append current uncovered shifts (newData)
+      const sections = newData.sections || [];
+      const uncoveredLines = [];
+      sections.forEach((section) => {
+        ensureUncovered(section);
+        days.forEach((dayKey) => {
+          const u = section.uncovered?.[dayKey];
+          if (!u) return;
+
+          const slots = typeof u === "string"
+            ? { s1: u, s2: "" }
+            : { s1: u.s1 || "", s2: u.s2 || "" };
+
+          ["s1", "s2"].forEach((slot) => {
+            const val = (slots[slot] || "").trim();
+            if (!val) return;
+            const d = getDateForDay(weekRow.week_ending, dayKey);
+            const dateStr = d ? formatUK(d.toISOString()) : dayKey.toUpperCase();
+            const title = section.title || "Section";
+            uncoveredLines.push(`- Uncovered: ${title} ${dateStr} (${slot.toUpperCase()}) ${val}`);
+          });
+        });
+      });
+
+      if (uncoveredLines.length) {
+        if (lines.length) {
+          lines.push("");
+          lines.push("Uncovered shifts:");
+        } else {
+          lines.push("Uncovered shifts:");
+        }
+        uncoveredLines.forEach((l) => lines.push(l));
+      }
+
+      return lines.join("\n");
     }
 
     // ===== COVERAGE BANNER =====
