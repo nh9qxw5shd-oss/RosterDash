@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Roster Template Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Supabase JS CDN -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <style>
+    html, body {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #d8dce3;
+      color: #0f172a;
+    }
+
+    header {
+      padding: 0.75rem 1rem;
+      background: #f5f6f8;
+      border-bottom: 1px solid #b8bfc9;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #0f172a;
+    }
+    header span {
+      font-size: 0.85rem;
+      color: #475569;
+    }
+
+    .container {
+      padding: 0.75rem 1rem 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #f2f3f5;
+      border-radius: 0.75rem;
+      border: 1px solid #b8bfc9;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    .card h2 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      color: #0f172a;
+    }
+    .muted {
+      color: #475569;
+      font-size: 0.8rem;
+    }
+
+    .flex {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .flex-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .mt-1 { margin-top: 0.25rem; }
+    .mt-2 { margin-top: 0.5rem; }
+    .mt-3 { margin-top: 0.75rem; }
+    .mb-1 { margin-bottom: 0.25rem; }
+    .mb-2 { margin-bottom: 0.5rem; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.45rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid #b8bfc9;
+      background: #e2e6eb;
+      color: #0f172a;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+      text-decoration: none;
+    }
+    .btn:hover {
+      background: #d5d9e2;
+      border-color: #aeb6c4;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+    }
+    .btn-primary {
+      border-color: #2563eb;
+      background: #3b82f6;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #2563eb;
+      border-color: #1d4ed8;
+    }
+    .btn-sm {
+      padding: 0.25rem 0.6rem;
+      font-size: 0.7rem;
+    }
+    .btn-danger {
+      border-color: #dc2626;
+      background: #ef4444;
+      color: #ffffff;
+    }
+
+    input, select, textarea {
+      background: #f3f4f6;
+      border-radius: 0.4rem;
+      border: 1px solid #b8bfc9;
+      color: #0f172a;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.8rem;
+      box-sizing: border-box;
+    }
+    input::placeholder {
+      color: #9ca3af;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid #3b82f6;
+      outline-offset: 1px;
+      border-color: #3b82f6;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 900px) {
+      .split {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 0.8rem;
+      background: #e3e6ee;
+    }
+    th, td {
+      border: 1px solid #b8bfc9;
+      padding: 0.3rem 0.4rem;
+      text-align: left;
+    }
+    thead {
+      background: #d3d7e0;
+    }
+    thead th {
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .template-row.active {
+      background: #e0f2fe;
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.3rem;
+    }
+    .section-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .section-note {
+      font-size: 0.75rem;
+      color: #4b5563;
+    }
+
+    .section-card {
+      background: #eef0f3;
+      border-radius: 0.5rem;
+      border: 1px solid #c4c9d2;
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .section-meta {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.35rem;
+    }
+    .section-meta input {
+      max-width: 220px;
+    }
+
+    .roster-table {
+      width: 100%;
+      border-radius: 0.4rem;
+      overflow: hidden;
+      table-layout: fixed;
+    }
+    .roster-table th:nth-child(1),
+    .roster-table td:nth-child(1) {
+      width: 160px;
+    }
+    .roster-table th:nth-child(n+2),
+    .roster-table td:nth-child(n+2) {
+      width: 80px;
+      text-align: center;
+    }
+
+    .shift-input {
+      width: 100%;
+      background: #ffffff;
+      font-weight: 600;
+    }
+
+    .shift-day {
+      background: #f1a983;
+      color: #7c2d12;
+    }
+    .shift-night {
+      background: #4d93d9;
+      color: #1e3a8a;
+    }
+    .shift-spare {
+      background: #d86dcd;
+      color: #701a75;
+    }
+    .shift-oo {
+      background: #ffff00;
+      color: #854d0e;
+    }
+    .shift-al {
+      background: #ff0000;
+      color: #ffffff !important;
+      text-decoration: line-through;
+    }
+    .shift-cl {
+      background: #ff0000;
+      color: #ffffff !important;
+      text-decoration: line-through;
+    }
+    .shift-sick {
+      background: #4d7c0f;
+      color: #ffffff !important;
+      text-decoration: line-through;
+    }
+    .shift-rd {
+      background: #f3f4f6;
+      color: #6b7280;
+      font-style: italic;
+    }
+    .shift-bo {
+      background: #ff0000;
+      color: #ffffff !important;
+      text-decoration: line-through;
+    }
+    .shift-rop {
+      font-weight: 900;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 0.1rem 0.4rem;
+      font-size: 0.7rem;
+      border: 1px solid #cbd2dd;
+      color: #4b5563;
+      background: #eef0f3;
+    }
+
+    .hidden { display: none !important; }
+    .error { color: #b91c1c; font-size: 0.8rem; }
+
+    .badge-role {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      background: #e5e7eb;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+    .badge-role.admin {
+      background: #ecfdf3;
+      border-color: #22c55e;
+      color: #166534;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Roster Template Admin</h1>
+      <span>Base structures for weekly rosters (admin only).</span>
+    </div>
+    <div class="flex">
+      <span id="user-info" class="muted">Not signed in</span>
+      <span id="user-role-pill" class="badge-role hidden"></span>
+      <button id="btn-signout" class="btn btn-sm hidden">Sign out</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Auth -->
+    <div id="auth-card" class="card">
+      <h2>Sign in</h2>
+      <p class="muted">
+        Use your Supabase account with <strong>admin</strong> role to edit templates.
+      </p>
+      <form id="auth-form" class="flex mt-2">
+        <input type="email" id="auth-email" placeholder="Email" required />
+        <input type="password" id="auth-password" placeholder="Password" required />
+        <button type="submit" class="btn btn-primary">Sign in</button>
+      </form>
+      <p id="auth-error" class="error mt-2"></p>
+    </div>
+
+    <!-- Blocked (non-admin) -->
+    <div id="blocked-card" class="card hidden">
+      <h2>Access denied</h2>
+      <p class="muted">
+        Your account is not authorised as an <strong>admin</strong> in the profiles table.
+      </p>
+      <p class="muted">
+        If you think this is wrong, speak to whoever maintains Supabase roles.  
+        Or shout at a cloud, same energy.
+      </p>
+    </div>
+
+    <!-- App -->
+    <div id="app" class="hidden">
+      <div class="card">
+        <div class="flex-between">
+          <div>
+            <h2>Template manager</h2>
+            <p class="muted">
+              Edit the <strong>base roster structures</strong> used when creating new weeks.
+            </p>
+          </div>
+          <div class="flex">
+            <button id="btn-new-template" class="btn btn-sm">New blank template</button>
+            <a href="index.html" class="btn btn-sm">Back to roster</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="split">
+          <!-- Template list -->
+          <div>
+            <h3 style="margin:0 0 0.25rem;font-size:0.9rem;">Templates</h3>
+            <p class="muted mb-1">One row per entry in <code>roster_templates</code>.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Name</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="templates-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Editor -->
+          <div>
+            <div class="flex-between mb-1">
+              <h3 style="margin:0;font-size:0.9rem;">Template editor</h3>
+              <span id="template-status" class="muted"></span>
+            </div>
+            <div id="template-editor">
+              <p class="muted">Select a template on the left or create a new blank one.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared shift presets -->
+  <datalist id="shift-presets">
+    <option value="0600-1800"></option>
+    <option value="0700-1900"></option>
+    <option value="0630-1830"></option>
+    <option value="1800-0600"></option>
+    <option value="1830-0630"></option>
+    <option value="SPARE 0600-1400"></option>
+    <option value="SPARE 1400-2200"></option>
+    <option value="SPARE NIGHT"></option>
+  </datalist>
+
+  <script>
+    // ===== Supabase config (same as roster page) =====
+    const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
+    const SUPABASE_ANON_KEY =
+      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
+
+    const { createClient } = window.supabase;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ===== State =====
+    let currentUser = null;
+    let currentProfile = null;
+    let templates = [];
+    let currentTemplate = null;
+
+    // ===== DOM =====
+    const authCard = document.getElementById("auth-card");
+    const blockedCard = document.getElementById("blocked-card");
+    const appEl = document.getElementById("app");
+
+    const authForm = document.getElementById("auth-form");
+    const authEmail = document.getElementById("auth-email");
+    const authPassword = document.getElementById("auth-password");
+    const authError = document.getElementById("auth-error");
+
+    const userInfo = document.getElementById("user-info");
+    const userRolePill = document.getElementById("user-role-pill");
+    const btnSignout = document.getElementById("btn-signout");
+
+    const templatesTbody = document.getElementById("templates-tbody");
+    const templateEditor = document.getElementById("template-editor");
+    const templateStatus = document.getElementById("template-status");
+    const btnNewTemplate = document.getElementById("btn-new-template");
+
+    const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+    const dayLabels = {
+      sun: "Sun",
+      mon: "Mon",
+      tue: "Tue",
+      wed: "Wed",
+      thu: "Thu",
+      fri: "Fri",
+      sat: "Sat"
+    };
+
+    // ===== Auth =====
+    authForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      authError.textContent = "";
+
+      const email = authEmail.value.trim();
+      const password = authPassword.value;
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        authError.textContent = error.message || "Login failed.";
+        return;
+      }
+      currentUser = data.user;
+      await afterAuth();
+    });
+
+    btnSignout.addEventListener("click", async () => {
+      await supabase.auth.signOut();
+      currentUser = null;
+      currentProfile = null;
+      templates = [];
+      currentTemplate = null;
+      userInfo.textContent = "Not signed in";
+      userRolePill.classList.add("hidden");
+      btnSignout.classList.add("hidden");
+      appEl.classList.add("hidden");
+      blockedCard.classList.add("hidden");
+      authCard.classList.remove("hidden");
+    });
+
+    async function loadProfile() {
+      if (!currentUser) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", currentUser.id)
+        .single();
+
+      if (error) {
+        console.error("loadProfile error", error);
+        return null;
+      }
+      return data;
+    }
+
+    async function afterAuth() {
+      currentProfile = await loadProfile();
+
+      const role = currentProfile?.role || "viewer";
+      userInfo.textContent = currentProfile
+        ? (currentProfile.full_name || currentUser.email)
+        : currentUser.email;
+
+      userRolePill.textContent = role;
+      userRolePill.classList.remove("hidden");
+      userRolePill.classList.toggle("admin", role === "admin");
+
+      btnSignout.classList.remove("hidden");
+
+      if (role !== "admin") {
+        // Not allowed in here
+        authCard.classList.add("hidden");
+        blockedCard.classList.remove("hidden");
+        appEl.classList.add("hidden");
+        return;
+      }
+
+      authCard.classList.add("hidden");
+      blockedCard.classList.add("hidden");
+      appEl.classList.remove("hidden");
+
+      await loadTemplates();
+    }
+
+    // Auto-init if already logged in
+    (async function init() {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        currentUser = data.session.user;
+        await afterAuth();
+      }
+    })();
+
+    // ===== Templates =====
+    async function loadTemplates() {
+      const { data, error } = await supabase
+        .from("roster_templates")
+        .select("id, name, code, structure")
+        .order("code", { ascending: true });
+
+      if (error) {
+        console.error("loadTemplates error", error);
+        return;
+      }
+      templates = data || [];
+      renderTemplateList();
+      templateEditor.innerHTML = `<p class="muted">Select a template on the left or create a new blank one.</p>`;
+      currentTemplate = null;
+    }
+
+    function renderTemplateList() {
+      templatesTbody.innerHTML = "";
+      if (!templates.length) {
+        templatesTbody.innerHTML = `
+          <tr><td colspan="3" class="muted">No templates found.</td></tr>
+        `;
+        return;
+      }
+
+      templates.forEach((t) => {
+        const tr = document.createElement("tr");
+        tr.className = "template-row" + (currentTemplate && currentTemplate.id === t.id ? " active" : "");
+        tr.innerHTML = `
+          <td>${t.code || ""}</td>
+          <td>${t.name || ""}</td>
+          <td style="text-align:right;">
+            <button class="btn btn-sm btn-load-template" data-id="${t.id}">Edit</button>
+          </td>
+        `;
+        templatesTbody.appendChild(tr);
+      });
+
+      templatesTbody.querySelectorAll(".btn-load-template").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-id");
+          const tmpl = templates.find((x) => x.id === id);
+          if (!tmpl) return;
+          openTemplate(tmpl);
+        });
+      });
+    }
+
+    function openTemplate(tmpl) {
+      // Work on a shallow copy and deep clone structure so we don't mutate list accidentally
+      currentTemplate = {
+        id: tmpl.id,
+        name: tmpl.name || "",
+        code: tmpl.code || "",
+        structure: normalizeStructure(tmpl.structure)
+      };
+      renderTemplateEditor();
+      renderTemplateList();
+    }
+
+    function normalizeStructure(struct) {
+      if (!struct || typeof struct !== "object" || !Array.isArray(struct.sections)) {
+        return {
+          sections: []
+        };
+      }
+      // Make sure each section has id, title, rows array
+      return {
+        sections: (struct.sections || []).map((sec, index) => ({
+          id: sec.id || `sec-${index + 1}-${Date.now()}`,
+          title: sec.title || `Section ${index + 1}`,
+          note: sec.note || "",
+          rows: (sec.rows || []).map((r) => ({
+            staff_name: r.staff_name || "",
+            shifts: normalizeShifts(r.shifts),
+            remarks: r.remarks || ""
+          }))
+        }))
+      };
+    }
+
+    function normalizeShifts(shifts) {
+      const obj = {};
+      days.forEach((d) => {
+        obj[d] = (shifts && shifts[d]) || "";
+      });
+      return obj;
+    }
+
+    function classifyShift(value) {
+      const classes = [];
+      if (!value) return "";
+
+      const v = String(value).trim().toUpperCase();
+
+      if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
+        classes.push("shift-day");
+      }
+      if (v.includes("1800-0600") || v.includes("1830-0630")) {
+        classes.push("shift-night");
+      }
+      if (v.includes("SPARE")) {
+        classes.push("shift-spare");
+      }
+      if (v === "N/A") {
+        classes.push("shift-oo");
+      }
+      if (v.includes("A/L")) {
+        classes.push("shift-al");
+      }
+      if (v.includes("C/L")) {
+        classes.push("shift-cl");
+      }
+      if (v.includes("SICK") || v.includes("S/L")) {
+        classes.push("shift-sick");
+      }
+      if (v === "RD") {
+        classes.push("shift-rd");
+      }
+      if (v.includes("B.O")) {
+        classes.push("shift-al");
+      }
+      if (v.includes("LROP") || v.includes("HROP")) {
+        classes.push("shift-rop");
+      }
+
+      return classes.join(" ");
+    }
+
+    function renderTemplateEditor() {
+      if (!currentTemplate) {
+        templateEditor.innerHTML = `<p class="muted">Select a template on the left or create a new blank one.</p>`;
+        return;
+      }
+
+      const struct = currentTemplate.structure || { sections: [] };
+
+      const container = document.createElement("div");
+
+      // Meta block
+      const metaDiv = document.createElement("div");
+      metaDiv.className = "flex mb-2";
+      metaDiv.innerHTML = `
+        <input
+          id="tmpl-code"
+          type="text"
+          placeholder="Template code (e.g. WH-CTRL)"
+          style="max-width:180px;"
+        />
+        <input
+          id="tmpl-name"
+          type="text"
+          placeholder="Template name (e.g. WH Control core roster)"
+          style="min-width:220px;flex:1;"
+        />
+        <button id="btn-save-template" class="btn btn-primary btn-sm">Save template</button>
+      `;
+      container.appendChild(metaDiv);
+
+      // Status text
+      const info = document.createElement("p");
+      info.className = "muted mb-2";
+      info.textContent = "Adjust sections, staff and base shifts. These structures are copied into new weeks.";
+      container.appendChild(info);
+
+      // Sections
+      const sectionsWrap = document.createElement("div");
+
+      struct.sections.forEach((section, secIndex) => {
+        const secDiv = document.createElement("div");
+        secDiv.className = "section-card";
+        secDiv.dataset.sectionId = section.id;
+
+        const header = document.createElement("div");
+        header.className = "section-header";
+        header.innerHTML = `
+          <div>
+            <span class="section-title">${section.title || `Section ${secIndex + 1}`}</span>
+          </div>
+          <div class="flex">
+            <button class="btn btn-sm btn-add-row">Add row</button>
+            <button class="btn btn-sm btn-danger btn-delete-section">Delete section</button>
+          </div>
+        `;
+        secDiv.appendChild(header);
+
+        const metaRow = document.createElement("div");
+        metaRow.className = "section-meta";
+        metaRow.innerHTML = `
+          <input
+            type="text"
+            class="input-section-title"
+            placeholder="Section title (e.g. Link 1 / RCM)"
+          />
+          <input
+            type="text"
+            class="input-section-note"
+            placeholder="Optional note (e.g. Nights only)"
+          />
+        `;
+        secDiv.appendChild(metaRow);
+
+        const table = document.createElement("table");
+        table.className = "roster-table";
+        const thead = document.createElement("thead");
+        const headRow = document.createElement("tr");
+
+        headRow.innerHTML = `<th>Name</th>`;
+        days.forEach((d) => {
+          const th = document.createElement("th");
+          th.textContent = dayLabels[d];
+          headRow.appendChild(th);
+        });
+        thead.appendChild(headRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+
+        (section.rows || []).forEach((row, rowIndex) => {
+          const tr = document.createElement("tr");
+          tr.dataset.rowIndex = rowIndex;
+
+          const nameTd = document.createElement("td");
+          const nameInput = document.createElement("input");
+          nameInput.type = "text";
+          nameInput.className = "input-staff-name";
+          nameInput.placeholder = "Staff name";
+          nameInput.value = row.staff_name || "";
+          nameTd.appendChild(nameInput);
+          tr.appendChild(nameTd);
+
+          days.forEach((d) => {
+            const td = document.createElement("td");
+            const shiftInput = document.createElement("input");
+            shiftInput.type = "text";
+            shiftInput.className = "shift-input";
+            shiftInput.setAttribute("list", "shift-presets");
+            shiftInput.value = row.shifts?.[d] || "";
+            shiftInput.dataset.day = d;
+            shiftInput.addEventListener("input", () => {
+              shiftInput.className = "shift-input " + classifyShift(shiftInput.value);
+            });
+            shiftInput.className = "shift-input " + classifyShift(shiftInput.value);
+            td.appendChild(shiftInput);
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        secDiv.appendChild(table);
+
+        // Hook up meta values
+        setTimeout(() => {
+          const titleInput = secDiv.querySelector(".input-section-title");
+          const noteInput = secDiv.querySelector(".input-section-note");
+          if (titleInput) titleInput.value = section.title || "";
+          if (noteInput) noteInput.value = section.note || "";
+        }, 0);
+
+        sectionsWrap.appendChild(secDiv);
+      });
+
+      container.appendChild(sectionsWrap);
+
+      const addSectionBtn = document.createElement("button");
+      addSectionBtn.type = "button";
+      addSectionBtn.className = "btn btn-sm mt-2";
+      addSectionBtn.id = "btn-add-section";
+      addSectionBtn.textContent = "Add section";
+      container.appendChild(addSectionBtn);
+
+      templateEditor.innerHTML = "";
+      templateEditor.appendChild(container);
+
+      // Fill meta
+      document.getElementById("tmpl-code").value = currentTemplate.code || "";
+      document.getElementById("tmpl-name").value = currentTemplate.name || "";
+
+      // Wire buttons
+      document.getElementById("btn-save-template").addEventListener("click", saveTemplate);
+      document.getElementById("btn-add-section").addEventListener("click", addSectionFromUI);
+
+      templateEditor.querySelectorAll(".btn-add-row").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const secDiv = btn.closest(".section-card");
+          addRowToSection(secDiv);
+        });
+      });
+
+      templateEditor.querySelectorAll(".btn-delete-section").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const secDiv = btn.closest(".section-card");
+          deleteSectionFromUI(secDiv);
+        });
+      });
+    }
+
+    function addSectionFromUI() {
+      if (!currentTemplate) return;
+      const newSection = {
+        id: `sec-${Date.now()}`,
+        title: "New section",
+        note: "",
+        rows: []
+      };
+      currentTemplate.structure.sections.push(newSection);
+      renderTemplateEditor();
+    }
+
+    function deleteSectionFromUI(secDiv) {
+      if (!currentTemplate || !secDiv) return;
+      const secId = secDiv.dataset.sectionId;
+      currentTemplate.structure.sections = currentTemplate.structure.sections.filter(
+        (s) => s.id !== secId
+      );
+      renderTemplateEditor();
+    }
+
+    function addRowToSection(secDiv) {
+      if (!currentTemplate || !secDiv) return;
+      const secId = secDiv.dataset.sectionId;
+      const section = currentTemplate.structure.sections.find((s) => s.id === secId);
+      if (!section) return;
+
+      section.rows.push({
+        staff_name: "",
+        shifts: normalizeShifts({}),
+        remarks: ""
+      });
+      renderTemplateEditor();
+    }
+
+    function collectStructureFromUI() {
+      if (!currentTemplate) return { sections: [] };
+
+      const struct = { sections: [] };
+      const sectionCards = templateEditor.querySelectorAll(".section-card");
+
+      sectionCards.forEach((secDiv) => {
+        const secId = secDiv.dataset.sectionId;
+        const titleInput = secDiv.querySelector(".input-section-title");
+        const noteInput = secDiv.querySelector(".input-section-note");
+
+        const section = {
+          id: secId,
+          title: (titleInput?.value || "").trim() || "Section",
+          note: (noteInput?.value || "").trim(),
+          rows: []
+        };
+
+        const rows = secDiv.querySelectorAll("tbody tr");
+        rows.forEach((tr) => {
+          const nameInput = tr.querySelector(".input-staff-name");
+          const staffName = (nameInput?.value || "").trim();
+
+          const shifts = {};
+          days.forEach((d) => {
+            const input = tr.querySelector(`input.shift-input[data-day="${d}"]`);
+            shifts[d] = input ? (input.value || "").trim() : "";
+          });
+
+          section.rows.push({
+            staff_name: staffName,
+            shifts,
+            remarks: ""
+          });
+        });
+
+        struct.sections.push(section);
+      });
+
+      return struct;
+    }
+
+    async function saveTemplate() {
+      if (!currentTemplate) return;
+
+      const codeInput = document.getElementById("tmpl-code");
+      const nameInput = document.getElementById("tmpl-name");
+
+      const code = (codeInput.value || "").trim();
+      const name = (nameInput.value || "").trim();
+
+      if (!code || !name) {
+        alert("Template code and name are required.");
+        return;
+      }
+
+      const structure = collectStructureFromUI();
+
+      templateStatus.textContent = "Saving…";
+
+      let result;
+      if (currentTemplate.id) {
+        result = await supabase
+          .from("roster_templates")
+          .update({
+            code,
+            name,
+            structure
+          })
+          .eq("id", currentTemplate.id)
+          .select("*")
+          .single();
+      } else {
+        result = await supabase
+          .from("roster_templates")
+          .insert({
+            code,
+            name,
+            structure
+          })
+          .select("*")
+          .single();
+      }
+
+      const { data, error } = result;
+      if (error) {
+        console.error("saveTemplate error", error);
+        templateStatus.textContent = "Error saving template.";
+        alert("Error saving template.");
+        return;
+      }
+
+      currentTemplate = {
+        id: data.id,
+        name: data.name,
+        code: data.code,
+        structure: normalizeStructure(data.structure)
+      };
+
+      await loadTemplates();
+      openTemplate(currentTemplate);
+      templateStatus.textContent = "Template saved.";
+      setTimeout(() => {
+        templateStatus.textContent = "";
+      }, 2000);
+    }
+
+    btnNewTemplate.addEventListener("click", () => {
+      currentTemplate = {
+        id: null,
+        name: "",
+        code: "",
+        structure: {
+          sections: [
+            {
+              id: `sec-${Date.now()}`,
+              title: "Section 1",
+              note: "",
+              rows: []
+            }
+          ]
+        }
+      };
+      renderTemplateEditor();
+      renderTemplateList();
+    });
+  </script>
+</body>
+</html>
