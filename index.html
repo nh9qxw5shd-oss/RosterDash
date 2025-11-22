@@ -649,16 +649,17 @@ head>
   </style>
 </head>
 <body>
-  <header class="no-print">
-    <div>
-      <h1>Control Roster</h1>
-      <span>GitHub-hosted • Supabase-backed • Excel finally retired</span>
-    </div>
-    <div class="flex">
-      <span id="user-info" class="muted">Not signed in</span>
-      <button id="btn-signout" class="btn btn-sm hidden">Sign out</button>
-    </div>
-  </header>
+ <header class="no-print">
+  <div>
+    <h1>Control Roster</h1>
+    <span>GitHub-hosted • Supabase-backed • Excel finally retired</span>
+  </div>
+  <div class="flex">
+    <span id="user-info" class="muted">Not signed in</span>
+    <button id="btn-signout" class="btn btn-sm hidden">Sign out</button>
+    <a href="template-admin.html" id="link-template-admin" class="btn btn-sm hidden">Template admin</a>
+  </div>
+</header>
 
   <div class="container">
 
@@ -1116,29 +1117,40 @@ head>
     }
 
     async function postLoginInit() {
-      const role = currentProfile?.role || "viewer";
+  const role = currentProfile?.role || "viewer";
 
-      userInfo.textContent = currentProfile
-        ? `${currentProfile.full_name || currentUser.email} • ${currentProfile.role}`
-        : currentUser.email;
+  userInfo.textContent = currentProfile
+    ? `${currentProfile.full_name || currentUser.email} • ${currentProfile.role}`
+    : currentUser.email;
 
-      isPublicViewer = false;
-      btnSignout.classList.remove("hidden");
-      authCard.classList.add("hidden");
-      appEl.classList.remove("hidden");
+  isPublicViewer = false;
+  btnSignout.classList.remove("hidden");
 
-      newWeekDate.disabled = false;
-      newWeekTemplateSelect.disabled = false;
-      btnCreateWeek.disabled = !(role === "editor" || role === "admin");
-
-      syncTagTrayVisibility();
-
-      await loadTemplates();
-      await loadWeeks();
-      await loadAnalyticsYears();
-      await refreshAnalytics();
-      await refreshExpiryWatch();
+  // ✅ Show / hide Template Admin link based on role
+  const templateAdminLink = document.getElementById("link-template-admin");
+  if (templateAdminLink) {
+    if (role === "admin") {
+      templateAdminLink.classList.remove("hidden");
+    } else {
+      templateAdminLink.classList.add("hidden");
     }
+  }
+
+  authCard.classList.add("hidden");
+  appEl.classList.remove("hidden");
+
+  newWeekDate.disabled = false;
+  newWeekTemplateSelect.disabled = false;
+  btnCreateWeek.disabled = !(role === "editor" || role === "admin");
+
+  syncTagTrayVisibility();
+
+  await loadTemplates();
+  await loadWeeks();
+  await loadAnalyticsYears();
+  await refreshAnalytics();
+  await refreshExpiryWatch();
+}
 
     (async function init() {
       const { data } = await supabase.auth.getSession();
