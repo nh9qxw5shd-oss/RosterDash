@@ -252,7 +252,7 @@
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 0.65rem; /* increased gap for more room under shifts */
+      gap: 0.3rem; /* increased gap for more room under shifts */
     }
 
     .shift-input {
@@ -876,16 +876,17 @@
             <h2 id="editor-title">Week editor</h2>
             <p id="editor-subtitle" class="muted"></p>
           </div>
-          <div class="flex no-print">
-            <span id="editor-status-pill" class="status-pill"></span>
-            <button id="btn-save-week" class="btn btn-primary btn-sm">Save draft</button>
-            <button id="btn-publish-week" class="btn btn-sm">Publish</button>
-            <label class="muted" style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;">
-              <input type="checkbox" id="toggle-readonly" />
-              Read-only
-            </label>
-            <button id="btn-print-week" class="btn btn-sm">Print / PDF</button>
-          </div>
+         <div class="flex no-print">
+  <span id="editor-status-pill" class="status-pill"></span>
+  <button id="btn-save-week" class="btn btn-primary btn-sm">Save draft</button>
+  <button id="btn-publish-week" class="btn btn-sm">Publish</button>
+  <button id="btn-change-log" class="btn btn-sm">Change log</button>
+  <label class="muted" style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;">
+    <input type="checkbox" id="toggle-readonly" />
+    Read-only
+  </label>
+  <button id="btn-print-week" class="btn btn-sm">Print / PDF</button>
+</div>
         </div>
         <!-- Per-week roster filter -->
         <div class="mt-2 no-print" style="max-width:260px;">
@@ -1049,6 +1050,8 @@
     const btnPrintWeek = document.getElementById("btn-print-week");
     const readonlyToggle = document.getElementById("toggle-readonly");
     const rosterFilterInput = document.getElementById("roster-filter");
+const btnChangeLog = document.getElementById("btn-change-log");
+
 
     const analyticsYearSelect = document.getElementById("analytics-year");
     const btnRefreshAnalytics = document.getElementById("btn-refresh-analytics");
@@ -1931,80 +1934,86 @@
       alert("Draft saved.");
     });
 
-    btnPublishWeek.addEventListener("click", async () => {
-      const role = currentProfile?.role || "viewer";
-      if (!currentWeek || isPublicViewer || role === "viewer") return;
+async function saveVersionSnapshotForCurrentWeek() {
+  if (!currentWeek || !currentWeek.id || !currentWeek.data) return;
 
-      const previousSnapshot = currentWeek.last_published_data
-        ? JSON.parse(JSON.stringify(currentWeek.last_published_data))
-        : null;
-      const isRePublish = currentWeek.status === "published" && !!previousSnapshot;
+  try {
+    const { data: existing, error: loadErr } = await supabase
+      .from("roster_week_revisions")
+      .select("id")
+      .eq("week_id", currentWeek.id);
 
-      let changeLogText = "";
-      if (isRePublish && previousSnapshot) {
-        try {
-          changeLogText = buildChangeLog(previousSnapshot, currentWeek.data, currentWeek);
-        } catch (e) {
-          console.warn("buildChangeLog error", e);
-        }
-      }
+    if (loadErr) {
+      console.warn("saveVersionSnapshot load error", loadErr);
+    }
 
-      const payload = {
-        status: "published",
-        published_at: new Date().toISOString(),
-        data: currentWeek.data,
-        last_published_data: currentWeek.data
-      };
+    const nextVersion = (existing ? existing.length : 0) + 1;
 
-      const { data, error } = await supabase
-        .from("roster_weeks")
-        .update(payload)
-        .eq("id", currentWeek.id)
-        .select("*")
-        .single();
+    let snapshot;
+    try {
+      snapshot = JSON.parse(JSON.stringify(currentWeek.data));
+    } catch (e) {
+      console.warn("saveVersionSnapshot clone error", e);
+      return;
+    }
 
-      if (error) {
-        console.error(error);
-        alert("Error publishing week.");
-        return;
-      }
+    const { error: insertErr } = await supabase
+      .from("roster_week_revisions")
+      .insert({
+        week_id: currentWeek.id,
+        snapshot,
+        label: `V${nextVersion}`,
+        created_by: currentUser?.id || null
+      });
 
-      currentWeek = data;
-      setStatusPill("published");
-      syncEditorButtons();
-      await loadWeeks();
-      await loadAnalyticsYears();
-      await refreshAnalytics();
-      await refreshExpiryWatch();
-      await refreshShiftMarket();
+    if (insertErr) {
+      console.warn("saveVersionSnapshot insert error", insertErr);
+    }
+  } catch (e) {
+    console.warn("saveVersionSnapshot exception", e);
+  }
+}
 
-      if (isRePublish && changeLogText) {
-        const wants = confirm("Week published. Generate a change log to copy into an email?");
-        if (wants) {
-          let win;
-          try {
-            win = window.open("", "_blank", "width=900,height=700");
-          } catch (e) {
-            console.warn("Unable to open window for change log", e);
-          }
+   btnPublishWeek.addEventListener("click", async () => {
+  const role = currentProfile?.role || "viewer";
+  if (!currentWeek || isPublicViewer || role === "viewer") return;
 
-          if (win) {
-            const safe = changeLogText
-              .replace(/&/g, "&amp;")
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;");
-            win.document.write("<!doctype html><title>Roster change log</title>");
-            win.document.write("<pre style='font-family:system-ui,monospace;font-size:12px;white-space:pre-wrap;'>" + safe + "</pre>");
-            win.document.close();
-          } else {
-            console.log("Roster change log:\n" + changeLogText);
-            alert("Change log written to console (could not open a new window).");
-          }
-        }
-      } else {
-        alert("Week published.");
-      }
-    });
+  const payload = {
+    status: "published",
+    published_at: new Date().toISOString(),
+    data: currentWeek.data,
+    last_published_data: currentWeek.data
+  };
+
+  const { data, error } = await supabase
+    .from("roster_weeks")
+    .update(payload)
+    .eq("id", currentWeek.id)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error(error);
+    alert("Error publishing week.");
+    return;
+  }
+
+  currentWeek = data;
+  setStatusPill("published");
+  syncEditorButtons();
+
+  // 🔹 Save a versioned snapshot: V1, V2, V3...
+  await saveVersionSnapshotForCurrentWeek();
+
+  await loadWeeks();
+  await loadAnalyticsYears();
+  await refreshAnalytics();
+  await refreshExpiryWatch();
+  await refreshShiftMarket();
+
+  alert("Week published.");
+});
+
 
     btnPrintWeek.addEventListener("click", () => {
       if (!currentWeek) {
@@ -2070,6 +2079,13 @@
       const collapsed = analyticsBody.classList.toggle("hidden");
       btnToggleAnalytics.textContent = collapsed ? "Show" : "Hide";
     });
+
+// Change log button listener
+if (btnChangeLog) {
+  btnChangeLog.addEventListener("click", () => {
+    showChangeLog();
+  });
+}
 
     async function loadLeaveAllowances(year) {
       leaveAllowancesByName = {};
@@ -2949,94 +2965,198 @@
       return "Empty";
     }
 
-    function buildChangeLog(oldData, newData, weekRow) {
-      if (!oldData || !newData) return "";
-      if (!Array.isArray(oldData.sections) || !Array.isArray(newData.sections)) return "";
+   function buildChangeLog(oldData, newData, weekRow, options = {}) {
+  const includeUncovered = options.includeUncovered !== false; // default = true
 
-      const lines = [];
-      const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  if (!oldData || !newData) return "";
+  if (!Array.isArray(oldData.sections) || !Array.isArray(newData.sections)) return "";
 
-      const oldSections = oldData.sections || [];
-      const newSections = newData.sections || [];
+  const lines = [];
+  const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-      const sectionCount = Math.max(oldSections.length, newSections.length);
+  const oldSections = oldData.sections || [];
+  const newSections = newData.sections || [];
 
-      for (let si = 0; si < sectionCount; si++) {
-        const oldSection = oldSections[si] || { rows: [] };
-        const newSection = newSections[si] || { rows: [] };
+  const sectionCount = Math.max(oldSections.length, newSections.length);
 
-        const oldRows = oldSection.rows || [];
-        const newRows = newSection.rows || [];
-        const rowCount = Math.max(oldRows.length, newRows.length);
+  for (let si = 0; si < sectionCount; si++) {
+    const oldSection = oldSections[si] || { rows: [] };
+    const newSection = newSections[si] || { rows: [] };
 
-        for (let ri = 0; ri < rowCount; ri++) {
-          const oRow = oldRows[ri] || { shifts: {}, tags: {} };
-          const nRow = newRows[ri] || { shifts: {}, tags: {} };
+    const oldRows = oldSection.rows || [];
+    const newRows = newSection.rows || [];
+    const rowCount = Math.max(oldRows.length, newRows.length);
 
-          const name = (nRow.staff_name || oRow.staff_name || "").trim();
-          if (!name) continue;
+    for (let ri = 0; ri < rowCount; ri++) {
+      const oRow = oldRows[ri] || { shifts: {}, tags: {} };
+      const nRow = newRows[ri] || { shifts: {}, tags: {} };
 
-          days.forEach((dayKey) => {
-            const oldShift = oRow.shifts?.[dayKey] || "";
-            const newShift = nRow.shifts?.[dayKey] || "";
+      const name = (nRow.staff_name || oRow.staff_name || "").trim();
+      if (!name) continue;
 
-            const oldTags = normaliseCellTags(oRow, dayKey);
-            const newTags = normaliseCellTags(nRow, dayKey);
+      days.forEach((dayKey) => {
+        const oldShift = oRow.shifts?.[dayKey] || "";
+        const newShift = nRow.shifts?.[dayKey] || "";
 
-            const sameShift = String(oldShift || "").trim() === String(newShift || "").trim();
-            const sameTags =
-              oldTags.length === newTags.length &&
-              oldTags.every((t, idx) => t === newTags[idx]);
+        const oldTags = normaliseCellTags(oRow, dayKey);
+        const newTags = normaliseCellTags(nRow, dayKey);
 
-            if (sameShift && sameTags) return;
+        const sameShift = String(oldShift || "").trim() === String(newShift || "").trim();
+        const sameTags =
+          oldTags.length === newTags.length &&
+          oldTags.every((t, idx) => t === newTags[idx]);
 
-            const d = getDateForDay(weekRow.week_ending, dayKey);
-            const dateStr = d ? formatUK(d.toISOString()) : dayKey.toUpperCase();
+        if (sameShift && sameTags) return;
 
-            const fromDesc = describeShiftAndTags(oldShift, oldTags);
-            const toDesc = describeShiftAndTags(newShift, newTags);
+        const d = getDateForDay(weekRow.week_ending, dayKey);
+        const dateStr = d ? formatUK(d.toISOString()) : dayKey.toUpperCase();
 
-            lines.push(`- ${name} ${dateStr}: ${fromDesc} -> ${toDesc}`);
-          });
-        }
-      }
+        const fromDesc = describeShiftAndTags(oldShift, oldTags);
+        const toDesc = describeShiftAndTags(newShift, newTags);
 
-      // Append current uncovered shifts (newData)
-      const sections = newData.sections || [];
-      const uncoveredLines = [];
-      sections.forEach((section) => {
-        ensureUncovered(section);
-        days.forEach((dayKey) => {
-          const u = section.uncovered?.[dayKey];
-          if (!u) return;
-
-          const slots = typeof u === "string"
-            ? { s1: u, s2: "" }
-            : { s1: u.s1 || "", s2: u.s2 || "" };
-
-          ["s1", "s2"].forEach((slot) => {
-            const val = (slots[slot] || "").trim();
-            if (!val) return;
-            const d = getDateForDay(weekRow.week_ending, dayKey);
-            const dateStr = d ? formatUK(d.toISOString()) : dayKey.toUpperCase();
-            const title = section.title || "Section";
-            uncoveredLines.push(`- Uncovered: ${title} ${dateStr} (${slot.toUpperCase()}) ${val}`);
-          });
-        });
+        lines.push(`- ${name} ${dateStr}: ${fromDesc} -> ${toDesc}`);
       });
-
-      if (uncoveredLines.length) {
-        if (lines.length) {
-          lines.push("");
-          lines.push("Uncovered shifts:");
-        } else {
-          lines.push("Uncovered shifts:");
-        }
-        uncoveredLines.forEach((l) => lines.push(l));
-      }
-
-      return lines.join("\n");
     }
+  }
+
+  if (!includeUncovered) {
+    return lines.join("\n");
+  }
+
+  // Append current uncovered shifts (newData)
+  const sections = newData.sections || [];
+  const uncoveredLines = [];
+  sections.forEach((section) => {
+    ensureUncovered(section);
+    days.forEach((dayKey) => {
+      const u = section.uncovered?.[dayKey];
+      if (!u) return;
+
+      const slots =
+        typeof u === "string"
+          ? { s1: u, s2: "" }
+          : { s1: u.s1 || "", s2: u.s2 || "" };
+
+      ["s1", "s2"].forEach((slot) => {
+        const val = (slots[slot] || "").trim();
+        if (!val) return;
+        const d = getDateForDay(weekRow.week_ending, dayKey);
+        const dateStr = d ? formatUK(d.toISOString()) : dayKey.toUpperCase();
+        const title = section.title || "Section";
+        uncoveredLines.push(`- Uncovered: ${title} ${dateStr} (${slot.toUpperCase()}) ${val}`);
+      });
+    });
+  });
+
+  if (uncoveredLines.length) {
+    if (lines.length) {
+      lines.push("");
+      lines.push("Uncovered shifts:");
+    } else {
+      lines.push("Uncovered shifts:");
+    }
+    uncoveredLines.forEach((l) => lines.push(l));
+  }
+
+  return lines.join("\n");
+}
+
+async function showChangeLog() {
+  if (!currentWeek || !currentWeek.id) {
+    alert("Open a week before viewing the change log.");
+    return;
+  }
+
+  let revisions = [];
+  try {
+    const { data, error } = await supabase
+      .from("roster_week_revisions")
+      .select("id, week_id, snapshot, label, created_at")
+      .eq("week_id", currentWeek.id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("showChangeLog load error", error);
+      alert("Unable to load change log.");
+      return;
+    }
+    revisions = data || [];
+  } catch (e) {
+    console.error("showChangeLog exception", e);
+    alert("Unable to load change log.");
+    return;
+  }
+
+  if (!revisions.length) {
+    alert("No published versions recorded yet for this week.");
+    return;
+  }
+
+  const lines = [];
+
+  revisions.forEach((rev, idx) => {
+    const versionNumber = idx + 1;
+    const label = rev.label || `V${versionNumber}`;
+    const when = rev.created_at ? formatUK(rev.created_at) : "Unknown date";
+
+    lines.push(`Version ${label} (published ${when})`);
+    lines.push("".padEnd(40, "-"));
+
+    if (idx === 0) {
+      // No previous snapshot to diff against
+      lines.push("Initial publication from draft.");
+    } else {
+      const prevSnap = revisions[idx - 1].snapshot;
+      const diffText = buildChangeLog(prevSnap, rev.snapshot, currentWeek, {
+        includeUncovered: false
+      });
+      lines.push(diffText || "No changes detected.");
+    }
+
+    lines.push("");
+  });
+
+  // Current uncovered summary from the latest version
+  const latest = revisions[revisions.length - 1];
+  const uncoveredText = buildChangeLog(
+    latest.snapshot,
+    latest.snapshot,
+    currentWeek,
+    { includeUncovered: true }
+  );
+
+  if (uncoveredText && uncoveredText.trim()) {
+    lines.push("");
+    lines.push("Current uncovered shifts (latest version):");
+    lines.push(uncoveredText);
+  }
+
+  const finalText = lines.join("\n");
+
+  let win;
+  try {
+    win = window.open("", "_blank", "width=900,height=700");
+  } catch (e) {
+    console.warn("Unable to open window for change log", e);
+  }
+
+  if (win) {
+    const safe = finalText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    win.document.write("<!doctype html><title>Roster change log</title>");
+    win.document.write(
+      "<pre style='font-family:system-ui,monospace;font-size:12px;white-space:pre-wrap;'>" +
+        safe +
+      "</pre>"
+    );
+    win.document.close();
+  } else {
+    console.log("Roster change log:\n" + finalText);
+    alert("Change log written to console (could not open a new window).");
+  }
+}
 
     // ===== COVERAGE BANNER =====
     function computeWeekMetrics(weekRow) {
@@ -3256,5 +3376,3 @@
   </script>
 </body>
 </html>
-
-
