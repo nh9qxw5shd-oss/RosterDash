@@ -318,10 +318,9 @@
       font-weight: 700;
     }
     .tag-pill-hgd {
-      background: #11d1b1;
-      border-color: #11d1be;
-      color: #000000;
-      font-weight: 700;
+      background: #e5e7eb;
+      border-color: #9ca3af;
+      color: #111827;
     }
 
     /* ===== Conditional formatting ===== */
@@ -852,20 +851,21 @@
             Each row is an uncovered slot from a published roster. Use the selector to register interest
             against your name. Rankings are not an allocation decision, just a transparent view.
           </p>
-          <div class="table-scroll-x">
-            <table>
-              <thead>
-                <tr>
-                  <th>Week ending</th>
-                  <th>Date</th>
-                  <th>Section</th>
-                  <th>Shift</th>
-                  <th>Interest</th>
-                </tr>
-              </thead>
-              <tbody id="shift-market-tbody"></tbody>
-            </table>
-          </div>
+         <div class="table-scroll-x">
+  <table>
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Week ending</th>
+        <th>Date</th>
+        <th>Section</th>
+        <th>Shift</th>
+        <th>Interest</th>
+      </tr>
+    </thead>
+    <tbody id="shift-market-tbody"></tbody>
+  </table>
+</div>
         </div>
       </div>
       </div>
@@ -982,6 +982,9 @@
 
     // Active tag from the tray (e.g. "AL", "RDW", "CLEAR")
     let activeTag = null;
+
+    // Tracks whether current roster has unsaved edits
+    let hasUnsavedChanges = false;
 
     // ===== Date helpers =====
     function formatUK(dateStr) {
@@ -1123,7 +1126,9 @@ const btnChangeLog = document.getElementById("btn-change-log");
       await postLoginInit();
     });
 
-    btnSignout.addEventListener("click", async () => {
+      btnSignout.addEventListener("click", async () => {
+      if (!confirmDiscardChanges()) return;
+
       await supabase.auth.signOut();
       currentUser = null;
       currentProfile = null;
@@ -1136,8 +1141,11 @@ const btnChangeLog = document.getElementById("btn-change-log");
       editorCard.classList.add("hidden");
     });
 
-    btnViewer.addEventListener("click", async (e) => {
+        btnViewer.addEventListener("click", async (e) => {
       e.preventDefault();
+
+      if (!confirmDiscardChanges()) return;
+
       isPublicViewer = true;
       currentUser = null;
       currentProfile = { full_name: "Public viewer", role: "viewer" };
@@ -1261,6 +1269,8 @@ const btnChangeLog = document.getElementById("btn-change-log");
     }
 
     btnCreateWeek.addEventListener("click", async () => {
+      if (!confirmDiscardChanges()) return;
+
       const role = currentProfile?.role || "viewer";
       if (isPublicViewer || !(role === "editor" || role === "admin")) {
         alert("You do not have permission to create weeks.");
@@ -1358,8 +1368,10 @@ const btnChangeLog = document.getElementById("btn-change-log");
         weeksTbody.appendChild(tr);
       }
 
-      document.querySelectorAll(".btn-open-week").forEach((btn) => {
+           document.querySelectorAll(".btn-open-week").forEach((btn) => {
         btn.addEventListener("click", async () => {
+          if (!confirmDiscardChanges()) return;
+
           const id = btn.getAttribute("data-id");
           const { data, error } = await supabase
             .from("roster_weeks")
@@ -1417,6 +1429,9 @@ const btnChangeLog = document.getElementById("btn-change-log");
       renderRosterGrid(weekRow.data);
       syncEditorButtons();
       updateCoverageBanner();
+
+      // Opening a week is a clean baseline
+      hasUnsavedChanges = false;
     }
 
     function setStatusPill(status) {
@@ -1483,6 +1498,27 @@ const btnChangeLog = document.getElementById("btn-change-log");
       return classes.join(" ");
     }
 
+    const BLOCKED_MODIFIERS = ["RDW", "A/L", "C/L", "LROP", "HROP", "B.O", "SICK", "HGD"];
+
+    function enforceShiftInputRules(input) {
+      let original = input.value || "";
+      let working = original;
+
+      BLOCKED_MODIFIERS.forEach((tok) => {
+        const pattern = tok.replace(".", "\\.");
+        const re = new RegExp(pattern, "ig");
+        working = working.replace(re, "");
+      });
+
+      // Normalise spaces
+      working = working.replace(/\s{2,}/g, " ").trim();
+
+      if (working !== original) {
+        alert("Shift modifiers cannot be typed into this cell, use the tags to complete this function");
+        input.value = working;
+      }
+    }
+
     // Ensure uncovered structure supports two slots (s1, s2)
     function ensureUncovered(section) {
       if (!section.uncovered) {
@@ -1524,6 +1560,19 @@ const btnChangeLog = document.getElementById("btn-change-log");
 
       return diffDays >= 0 && diffDays <= 6;
     }
+
+    // Prompt user if they try to leave with unsaved changes
+    function confirmDiscardChanges() {
+      if (!hasUnsavedChanges) return true;
+      return window.confirm("Are you sure you want to leave this roster without saving?");
+    }
+
+    // Browser-level guard (tab close / reload / URL change)
+    window.addEventListener("beforeunload", (e) => {
+      if (!hasUnsavedChanges) return;
+      e.preventDefault();
+      e.returnValue = "";
+    });
 
     // Apply a tag from the tray to a single cell
     function applyTagToCell(sectionId, rowIndex, dayKey) {
@@ -1567,6 +1616,9 @@ const btnChangeLog = document.getElementById("btn-change-log");
           }
         }
       }
+
+ // Mark roster as dirty
+      hasUnsavedChanges = true;
 
       renderRosterGrid(currentWeek.data);
       updateCoverageBanner();
@@ -1844,6 +1896,7 @@ const btnChangeLog = document.getElementById("btn-change-log");
       if (isEffectiveReadOnly()) return;
 
       const input = e.target;
+      enforceShiftInputRules(input);
       const sectionId = input.dataset.sectionId;
       const day = input.dataset.day;
       const slot = input.dataset.slot || "s1";
@@ -1856,8 +1909,10 @@ const btnChangeLog = document.getElementById("btn-change-log");
       const dayObj = section.uncovered[day];
       if (!dayObj) return;
 
-      dayObj[slot] = input.value;
+            dayObj[slot] = input.value;
       input.className = "shift-input " + classifyShift(input.value, []);
+
+      hasUnsavedChanges = true;
       updateCoverageBanner();
     }
 
@@ -1872,8 +1927,9 @@ const btnChangeLog = document.getElementById("btn-change-log");
       const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
-      if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
+            if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
       section.rows[rowIndex].staff_name = input.value;
+      hasUnsavedChanges = true;
     }
 
     function handleRemarksChange(e) {
@@ -1887,14 +1943,16 @@ const btnChangeLog = document.getElementById("btn-change-log");
       const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
-      if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
+            if (!section.rows[rowIndex]) section.rows[rowIndex] = {};
       section.rows[rowIndex].remarks = input.value;
+      hasUnsavedChanges = true;
     }
 
     function handleShiftChange(e) {
       if (isEffectiveReadOnly()) return;
 
       const input = e.target;
+      enforceShiftInputRules(input);
       const sectionId = input.dataset.sectionId;
       const rowIndex = parseInt(input.dataset.rowIndex, 10);
       const field = input.dataset.field;
@@ -1909,8 +1967,10 @@ const btnChangeLog = document.getElementById("btn-change-log");
 
       section.rows[rowIndex].shifts[field] = input.value;
 
-      const tags = section.rows[rowIndex].tags[field] || [];
+            const tags = section.rows[rowIndex].tags[field] || [];
       input.className = "shift-input " + classifyShift(input.value, tags);
+
+      hasUnsavedChanges = true;
       updateCoverageBanner();
     }
 
@@ -1926,12 +1986,13 @@ const btnChangeLog = document.getElementById("btn-change-log");
         .select("*")
         .single();
 
-      if (error) {
+           if (error) {
         console.error(error);
         alert("Error saving week.");
         return;
       }
       currentWeek = data;
+      hasUnsavedChanges = false;
       alert("Draft saved.");
     });
 
@@ -2005,6 +2066,8 @@ async function saveVersionSnapshotForCurrentWeek() {
 
   // 🔹 Save a versioned snapshot: V1, V2, V3...
   await saveVersionSnapshotForCurrentWeek();
+
+  hasUnsavedChanges = false;
 
   await loadWeeks();
   await loadAnalyticsYears();
@@ -2412,6 +2475,72 @@ if (btnChangeLog) {
       return order.indexOf(dayKey);
     }
 
+function computeShiftMarketStatus(entry, interested, today) {
+  const oneDay = 24 * 60 * 60 * 1000;
+  const shiftDate = entry.dateObj;
+  if (!shiftDate) {
+    return { emoji: "⚪", label: "No date available" };
+  }
+
+  const daysUntil = Math.floor((shiftDate - today) / oneDay);
+
+  // No interest yet
+  if (!interested || interested.length === 0) {
+    // More than 4 weeks away: RED – no bids yet, plenty of time
+    if (daysUntil > 28) {
+      return {
+        emoji: "🔴",
+        label: "No interest yet."
+      };
+    }
+
+    // Within 4 weeks and still nothing: BLACK – RCM needs to intervene
+    return {
+      emoji: "⚫",
+      label: "RCM required to attempt to organise cover."
+    };
+  }
+
+  // At least one interest: find earliest interest as bidding start
+  let firstInterest = null;
+  interested.forEach((r) => {
+    if (!r.created_at) return;
+    const d = new Date(r.created_at);
+    if (!isNaN(d)) {
+      if (!firstInterest || d < firstInterest) firstInterest = d;
+    }
+  });
+
+  if (!firstInterest) {
+    // Failsafe: treat as bidding but no usable created_at
+    return {
+      emoji: "🟡",
+      label: "Bidding window open."
+    };
+  }
+
+  const biddingEnd = new Date(firstInterest.getTime() + 14 * oneDay);
+  const daysLeft = Math.max(
+    0,
+    Math.ceil((biddingEnd - today) / oneDay)
+  );
+
+  // YELLOW: bidding window open (first interest, < 2 weeks since, and > 4 weeks away)
+  if (today < biddingEnd && daysUntil > 28) {
+    return {
+      emoji: "🟡",
+      label: `Bidding window open – ${daysLeft} day(s) remaining.`
+    };
+  }
+
+  // GREEN: either 2+ weeks have passed since first interest OR we are within 4 weeks
+  // and there is at least one bid. Someone has effectively "won".
+  return {
+    emoji: "🟢",
+    label: "Interest registered – allocate from ranked list."
+  };
+}
+
     async function refreshShiftMarket() {
       if (!shiftMarketTbody) return;
 
@@ -2519,39 +2648,47 @@ if (btnChangeLog) {
       }
 
       entries.forEach((e) => {
-        const key = `${e.weekId}|${e.sectionId || ""}|${e.dayKey}|${e.slot}`;
-        const interested = (interestByKey[key] || []).slice();
+  const key = `${e.weekId}|${e.sectionId || ""}|${e.dayKey}|${e.slot}`;
+  const interested = (interestByKey[key] || []).slice();
 
-        const isSunday = e.dayKey === "sun";
-        interested.sort((a, b) => {
-          const ua = usageMap[a.staff_name] || { rdwTotal: 0, rdwSun: 0 };
-          const ub = usageMap[b.staff_name] || { rdwTotal: 0, rdwSun: 0 };
-          const aScore = isSunday ? ua.rdwSun : ua.rdwTotal;
-          const bScore = isSunday ? ub.rdwSun : ub.rdwTotal;
-          if (aScore !== bScore) return aScore - bScore;
-          return a.staff_name.localeCompare(b.staff_name);
-        });
+  const isSunday = e.dayKey === "sun";
+  interested.sort((a, b) => {
+    const ua = usageMap[a.staff_name] || { rdwTotal: 0, rdwSun: 0 };
+    const ub = usageMap[b.staff_name] || { rdwTotal: 0, rdwSun: 0 };
+    const aScore = isSunday ? ua.rdwSun : ua.rdwTotal;
+    const bScore = isSunday ? ub.rdwSun : ub.rdwTotal;
+    if (aScore !== bScore) return aScore - bScore;
+    return a.staff_name.localeCompare(b.staff_name);
+  });
 
-        const tr = document.createElement("tr");
+  const tr = document.createElement("tr");
 
-        const weekTd = document.createElement("td");
-        weekTd.textContent = formatUK(e.weekEnding);
-        tr.appendChild(weekTd);
+  // NEW: status cell with emoji
+  const statusTd = document.createElement("td");
+  const status = computeShiftMarketStatus(e, interested, today);
+  statusTd.textContent = status.emoji;
+  statusTd.title = status.label;
+  statusTd.style.textAlign = "center";
+  tr.appendChild(statusTd);
 
-        const dateTd = document.createElement("td");
-        dateTd.textContent = e.dateObj ? formatUK(e.dateObj.toISOString()) : "";
-        tr.appendChild(dateTd);
+  const weekTd = document.createElement("td");
+  weekTd.textContent = formatUK(e.weekEnding);
+  tr.appendChild(weekTd);
 
-        const sectionTd = document.createElement("td");
-        sectionTd.textContent = e.sectionTitle;
-        tr.appendChild(sectionTd);
+  const dateTd = document.createElement("td");
+  dateTd.textContent = e.dateObj ? formatUK(e.dateObj.toISOString()) : "";
+  tr.appendChild(dateTd);
 
-        const shiftTd = document.createElement("td");
-        shiftTd.textContent = e.shiftText;
-        tr.appendChild(shiftTd);
+  const sectionTd = document.createElement("td");
+  sectionTd.textContent = e.sectionTitle;
+  tr.appendChild(sectionTd);
 
-               const interestTd = document.createElement("td");
-        interestTd.style.textAlign = "left";
+  const shiftTd = document.createElement("td");
+  shiftTd.textContent = e.shiftText;
+  tr.appendChild(shiftTd);
+
+  const interestTd = document.createElement("td");
+  interestTd.style.textAlign = "left";
 
         // Everyone (including public viewer) can register interest
         const controlWrap = document.createElement("div");
@@ -2616,26 +2753,63 @@ if (btnChangeLog) {
         controlWrap.appendChild(btn);
         interestTd.appendChild(controlWrap);
 
-        const rankDiv = document.createElement("div");
-        rankDiv.className = "muted";
-        rankDiv.style.fontSize = "0.75rem";
-        rankDiv.style.marginTop = "0.25rem";
+       const rankDiv = document.createElement("div");
+rankDiv.className = "muted";
+rankDiv.style.fontSize = "0.75rem";
+rankDiv.style.marginTop = "0.25rem";
 
-        if (interested.length) {
-          const listStr = interested
-            .map((r) => {
-              const u = usageMap[r.staff_name] || { rdwTotal: 0, rdwSun: 0 };
-              const score = isSunday ? u.rdwSun : u.rdwTotal;
-              const label = isSunday ? `Sun RDW: ${score}` : `RDW: ${score}`;
-              return `${r.staff_name} (${label})`;
-            })
-            .join(" • ");
-          rankDiv.textContent = "Ranked interest: " + listStr;
-        } else {
-          rankDiv.textContent = "No interest registered yet.";
-        }
+if (interested.length) {
+  rankDiv.textContent = "Ranked interest: ";
 
-        interestTd.appendChild(rankDiv);
+  interested.forEach((r, idx) => {
+    const u = usageMap[r.staff_name] || { rdwTotal: 0, rdwSun: 0 };
+    const score = isSunday ? u.rdwSun : u.rdwTotal;
+    const label = isSunday ? `Sun RDW: ${score}` : `RDW: ${score}`;
+
+    const pill = document.createElement("span");
+    pill.textContent = `${r.staff_name} (${label})`;
+    pill.style.cursor = "pointer";
+    pill.style.textDecoration = "underline";
+    pill.style.textDecorationStyle = "dotted";
+    pill.style.marginRight = "0.35rem";
+
+    pill.addEventListener("click", async () => {
+      const sure = confirm(
+        `Remove interest for ${r.staff_name} on this shift?`
+      );
+      if (!sure) return;
+
+      try {
+       const { error } = await supabase
+  .from("shift_market_interest")
+  .delete()
+  .eq("id", r.id);
+
+if (error) {
+  console.warn("Remove interest error", error);
+  alert("Unable to remove interest.");
+  return;
+}
+
+        await refreshShiftMarket();
+      } catch (err) {
+        console.warn("Remove interest exception", err);
+        alert("Unable to remove interest.");
+      }
+    });
+
+    rankDiv.appendChild(pill);
+
+    if (idx < interested.length - 1) {
+      const sep = document.createElement("span");
+      sep.textContent = " • ";
+      rankDiv.appendChild(sep);
+    }
+  });
+} else {
+  rankDiv.textContent = "No interest registered yet.";
+}
+interestTd.appendChild(rankDiv);
         tr.appendChild(interestTd);
         shiftMarketTbody.appendChild(tr);
       });
@@ -3377,4 +3551,3 @@ async function showChangeLog() {
   </script>
 </body>
 </html>
-
