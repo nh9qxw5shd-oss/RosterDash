@@ -1607,12 +1607,38 @@ const btnChangeLog = document.getElementById("btn-change-log");
             row.rdw[dayKey] = false;
           }
         } else {
-          // Add tag
+                   // Add tag
           tags.push(tagUpper);
           row.tags[dayKey] = tags;
           if (tagUpper === "RDW") {
             if (!row.rdw) row.rdw = {};
             row.rdw[dayKey] = true;
+          }
+
+          // If A/L or C/L is being added, mirror the existing shift into the uncovered row (unless it's SPARE)
+          if (
+  tagUpper === "AL" ||
+  tagUpper === "CL" ||
+  tagUpper === "BO" ||
+  tagUpper === "SICK"
+) {
+            // Make sure the uncovered structure exists for this section/day
+            ensureUncovered(section);
+            const u = section.uncovered[dayKey];
+            const shiftVal =
+              row.shifts && row.shifts[dayKey]
+                ? String(row.shifts[dayKey])
+                : "";
+            const upperShift = shiftVal.toUpperCase();
+
+            // Ignore pure spare shifts
+            if (shiftVal && !upperShift.includes("SPARE")) {
+              if (!u.s1) {
+                u.s1 = shiftVal;
+              } else if (!u.s2) {
+                u.s2 = shiftVal;
+              }
+            }
           }
         }
       }
