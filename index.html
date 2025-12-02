@@ -203,6 +203,31 @@
       box-sizing: border-box;
     }
 
+/* Roster weeks hierarchy rows */
+#weeks-tbody tr.year-row td {
+  background: #cbd5e1;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+#weeks-tbody tr.month-row td {
+  background: #e5e7eb;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  padding-left: 1.5rem;
+}
+
+.year-toggle,
+.month-toggle {
+  display: inline-block;
+  width: 1rem;
+  text-align: center;
+  margin-right: 0.25rem;
+  font-size: 0.8rem;
+}
+
     /* ===== Desktop roster sizing ===== */
     .roster-grid table.roster-table {
       table-layout: fixed;
@@ -612,6 +637,39 @@
     .leave-detail-block ul {
       margin: 0.1rem 0 0.4rem 1rem;
       padding: 0;
+    }
+
+    /* ===== Roster weeks hierarchy ===== */
+    .weeks-year-row td {
+      background: #e5e7eb;
+      font-weight: 600;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    .weeks-month-row td {
+      background: #f3f4f6;
+      text-align: left;
+      padding-left: 1.75rem;
+      font-weight: 500;
+      font-size: 0.8rem;
+    }
+
+    .weeks-week-row td {
+      background: #ffffff;
+    }
+
+    .weeks-toggle {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      margin-right: 0.35rem;
+      font-size: 0.8rem;
+    }
+
+    .weeks-year-row.collapsed td,
+    .weeks-month-row.collapsed td {
+      opacity: 0.85;
     }
 
     /* Print styling */
@@ -1041,6 +1099,50 @@
 
     const newWeekTemplateSelect = document.getElementById("new-week-template");
     const weeksTbody = document.getElementById("weeks-tbody");
+
+// Collapsible Year → Month → Week behaviour for roster weeks table
+weeksTbody.addEventListener("click", (e) => {
+  const yearRow = e.target.closest("tr.year-row");
+  if (yearRow) {
+    const year = yearRow.dataset.year;
+    const collapsed = yearRow.dataset.collapsed === "true";
+    const newCollapsed = !collapsed;
+    yearRow.dataset.collapsed = newCollapsed ? "true" : "false";
+
+    const icon = yearRow.querySelector(".year-toggle");
+    if (icon) icon.textContent = newCollapsed ? "▶" : "▼";
+
+    // Hide/show all rows for that year except the year header itself
+    weeksTbody.querySelectorAll(`tr[data-year="${year}"]`).forEach((row) => {
+      if (row === yearRow) return;
+      row.style.display = newCollapsed ? "none" : "";
+    });
+
+    return;
+  }
+
+  const monthRow = e.target.closest("tr.month-row");
+  if (monthRow) {
+    const year = monthRow.dataset.year;
+    const month = monthRow.dataset.month;
+    const collapsed = monthRow.dataset.collapsed === "true";
+    const newCollapsed = !collapsed;
+    monthRow.dataset.collapsed = newCollapsed ? "true" : "false";
+
+    const icon = monthRow.querySelector(".month-toggle");
+    if (icon) icon.textContent = newCollapsed ? "▶" : "▼";
+
+    // Hide/show only the week rows for this month/year
+    weeksTbody
+      .querySelectorAll(`tr.week-row[data-year="${year}"][data-month="${month}"]`)
+      .forEach((row) => {
+        row.style.display = newCollapsed ? "none" : "";
+      });
+
+    return;
+  }
+});
+
     const newWeekDate = document.getElementById("new-week-date");
     const btnCreateWeek = document.getElementById("btn-create-week");
 
@@ -1325,10 +1427,12 @@ const btnChangeLog = document.getElementById("btn-change-log");
     });
 
     // ===== WEEK LIST =====
-    async function loadWeeks() {
+       async function loadWeeks() {
       const { data, error } = await supabase
         .from("roster_weeks")
-        .select("id, week_ending, label, status, template_id, created_at, published_at, data, roster_templates(name, code)")
+        .select(
+          "id, week_ending, label, status, template_id, created_at, published_at, data, roster_templates(name, code)"
+        )
         .order("week_ending", { ascending: false });
 
       if (error) {
@@ -1337,38 +1441,127 @@ const btnChangeLog = document.getElementById("btn-change-log");
       }
 
       weeksTbody.innerHTML = "";
-      for (const w of data) {
-        const tr = document.createElement("tr");
-        const tmplLabel = w.roster_templates
-          ? `${w.roster_templates.code} – ${w.roster_templates.name}`
-          : "N/A";
+      if (!data || !data.length) return;
 
-        const metrics = computeWeekMetrics(w);
-        const hasGaps = metrics.uncovered > 0;
+      // Group weeks -> year -> month
+      const groups = {};
+      data.forEach((w) => {
+        if (!w.week_ending) return;
+        const d = new Date(w.week_ending);
+        if (isNaN(d)) return;
+        const year = d.getFullYear();
+        const monthIdx = d.getMonth(); // 0-11
 
-        const coverageCell = hasGaps
-          ? `<span class="tag" style="border-color:#fbbf24;background:#fef9c3;color:#92400e;">⚠ Gaps</span>`
-          : `<span class="tag" style="border-color:#22c55e;background:#ecfdf3;color:#166534;">✅ Full</span>`;
+        if (!groups[year]) groups[year] = {};
+        if (!groups[year][monthIdx]) groups[year][monthIdx] = [];
+        groups[year][monthIdx].push(w);
+      });
 
-        tr.innerHTML = `
-          <td>${formatUK(w.week_ending)}</td>
-          <td>${w.label || ""}</td>
-          <td>
-            <span class="status-pill ${w.status === "published" ? "status-published" : "status-draft"}">
-              ${w.status}
-            </span>
-          </td>
-          <td>${tmplLabel}</td>
-          <td>${coverageCell}</td>
-          <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
-          <td>
-            <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
-          </td>
+      const today = new Date();
+      const currentYearNum = today.getFullYear();
+      const currentMonthNum = today.getMonth(); // 0-11
+
+      const sortedYears = Object.keys(groups)
+        .map(Number)
+        .sort((a, b) => b - a); // latest year first
+
+      sortedYears.forEach((year) => {
+        // ==== Year row ====
+        const yearTr = document.createElement("tr");
+        yearTr.className = "weeks-year-row";
+        yearTr.dataset.year = String(year);
+
+        const yearTd = document.createElement("td");
+        yearTd.colSpan = 7;
+        yearTd.innerHTML = `
+          <button
+            type="button"
+            class="weeks-toggle"
+            data-level="year"
+            data-year="${year}"
+          >
+            ▼
+          </button>
+          <strong>${year}</strong>
         `;
-        weeksTbody.appendChild(tr);
-      }
+        yearTr.appendChild(yearTd);
+        weeksTbody.appendChild(yearTr);
 
-           document.querySelectorAll(".btn-open-week").forEach((btn) => {
+        // ==== Month rows ====
+        const monthsObj = groups[year];
+        const sortedMonths = Object.keys(monthsObj)
+          .map(Number)
+          .sort((a, b) => b - a); // latest month first
+
+        sortedMonths.forEach((monthIdx) => {
+          const monthName = new Date(year, monthIdx, 1).toLocaleString("en-GB", {
+            month: "long",
+          });
+
+          const monthTr = document.createElement("tr");
+          monthTr.className = "weeks-month-row";
+          monthTr.dataset.year = String(year);
+          monthTr.dataset.month = String(monthIdx);
+
+          const monthTd = document.createElement("td");
+          monthTd.colSpan = 7;
+          monthTd.innerHTML = `
+            <button
+              type="button"
+              class="weeks-toggle"
+              data-level="month"
+              data-year="${year}"
+              data-month="${monthIdx}"
+            >
+              ▼
+            </button>
+            <span>${monthName}</span>
+          `;
+          monthTr.appendChild(monthTd);
+          weeksTbody.appendChild(monthTr);
+
+          // ==== Week rows ====
+          monthsObj[monthIdx].forEach((w) => {
+            const tr = document.createElement("tr");
+            tr.className = "weeks-week-row";
+            tr.dataset.year = String(year);
+            tr.dataset.month = String(monthIdx);
+
+            const tmplLabel = w.roster_templates
+              ? `${w.roster_templates.code} – ${w.roster_templates.name}`
+              : "N/A";
+
+            const metrics = computeWeekMetrics(w);
+            const hasGaps = metrics.uncovered > 0;
+
+            const coverageCell = hasGaps
+              ? `<span class="tag" style="border-color:#fbbf24;background:#fef9c3;color:#92400e;">⚠ Gaps</span>`
+              : `<span class="tag" style="border-color:#22c55e;background:#ecfdf3;color:#166534;">✅ Full</span>`;
+
+            tr.innerHTML = `
+              <td>${formatUK(w.week_ending)}</td>
+              <td>${w.label || ""}</td>
+              <td>
+                <span class="status-pill ${
+                  w.status === "published" ? "status-published" : "status-draft"
+                }">
+                  ${w.status}
+                </span>
+              </td>
+              <td>${tmplLabel}</td>
+              <td>${coverageCell}</td>
+              <td>${w.published_at ? formatUK(w.published_at) : ""}</td>
+              <td>
+                <button class="btn btn-sm btn-open-week" data-id="${w.id}">Open</button>
+              </td>
+            `;
+            weeksTbody.appendChild(tr);
+          });
+        });
+      });
+
+      // Wire up the "Open" buttons as before
+      document.querySelectorAll(".btn-open-week").forEach((btn) => {
         btn.addEventListener("click", async () => {
           if (!confirmDiscardChanges()) return;
 
@@ -1384,6 +1577,189 @@ const btnChangeLog = document.getElementById("btn-change-log");
             return;
           }
           await openWeek(data);
+        });
+      });
+
+      // Apply initial collapse state & wire toggles
+      applyInitialWeekCollapse(currentYearNum, currentMonthNum);
+      wireWeekToggleHandlers();
+    }
+
+    function collapseYear(year) {
+      const yStr = String(year);
+      const yearRow = weeksTbody.querySelector(
+        `.weeks-year-row[data-year="${yStr}"]`
+      );
+      if (yearRow) yearRow.classList.add("collapsed");
+
+      // Hide months + weeks for this year
+      weeksTbody
+        .querySelectorAll(
+          `.weeks-month-row[data-year="${yStr}"], .weeks-week-row[data-year="${yStr}"]`
+        )
+        .forEach((row) => {
+          row.style.display = "none";
+        });
+
+      const btn = weeksTbody.querySelector(
+        `.weeks-toggle[data-level="year"][data-year="${yStr}"]`
+      );
+      if (btn) btn.textContent = "▶";
+      return true;
+    }
+
+    function expandYear(year) {
+      const yStr = String(year);
+      const yearRow = weeksTbody.querySelector(
+        `.weeks-year-row[data-year="${yStr}"]`
+      );
+      if (yearRow) yearRow.classList.remove("collapsed");
+
+      // Show month headers; week rows controlled by their month collapse state
+      weeksTbody
+        .querySelectorAll(`.weeks-month-row[data-year="${yStr}"]`)
+        .forEach((row) => {
+          row.style.display = "";
+        });
+
+      const btn = weeksTbody.querySelector(
+        `.weeks-toggle[data-level="year"][data-year="${yStr}"]`
+      );
+      if (btn) btn.textContent = "▼";
+      return false;
+    }
+
+    function toggleYear(year) {
+      const yStr = String(year);
+      const yearRow = weeksTbody.querySelector(
+        `.weeks-year-row[data-year="${yStr}"]`
+      );
+      const collapsed = yearRow?.classList.contains("collapsed");
+      if (collapsed) {
+        return expandYear(year);
+      } else {
+        return collapseYear(year);
+      }
+    }
+
+    function collapseMonth(year, monthIdx) {
+      const yStr = String(year);
+      const mStr = String(monthIdx);
+      const monthRow = weeksTbody.querySelector(
+        `.weeks-month-row[data-year="${yStr}"][data-month="${mStr}"]`
+      );
+      if (monthRow) monthRow.classList.add("collapsed");
+
+      weeksTbody
+        .querySelectorAll(
+          `.weeks-week-row[data-year="${yStr}"][data-month="${mStr}"]`
+        )
+        .forEach((row) => {
+          row.style.display = "none";
+        });
+
+      const btn = weeksTbody.querySelector(
+        `.weeks-toggle[data-level="month"][data-year="${yStr}"][data-month="${mStr}"]`
+      );
+      if (btn) btn.textContent = "▶";
+      return true;
+    }
+
+    function expandMonth(year, monthIdx) {
+      const yStr = String(year);
+      const mStr = String(monthIdx);
+      const monthRow = weeksTbody.querySelector(
+        `.weeks-month-row[data-year="${yStr}"][data-month="${mStr}"]`
+      );
+      if (monthRow) monthRow.classList.remove("collapsed");
+
+      weeksTbody
+        .querySelectorAll(
+          `.weeks-week-row[data-year="${yStr}"][data-month="${mStr}"]`
+        )
+        .forEach((row) => {
+          row.style.display = "";
+        });
+
+      const btn = weeksTbody.querySelector(
+        `.weeks-toggle[data-level="month"][data-year="${yStr}"][data-month="${mStr}"]`
+      );
+      if (btn) btn.textContent = "▼";
+      return false;
+    }
+
+    function toggleMonth(year, monthIdx) {
+      const yStr = String(year);
+      const mStr = String(monthIdx);
+      const monthRow = weeksTbody.querySelector(
+        `.weeks-month-row[data-year="${yStr}"][data-month="${mStr}"]`
+      );
+      const collapsed = monthRow?.classList.contains("collapsed");
+      if (collapsed) {
+        return expandMonth(year, monthIdx);
+      } else {
+        return collapseMonth(year, monthIdx);
+      }
+    }
+
+    function applyInitialWeekCollapse(currentYear, currentMonth) {
+      // Default: everything visible
+      weeksTbody
+        .querySelectorAll(
+          ".weeks-year-row, .weeks-month-row, .weeks-week-row"
+        )
+        .forEach((row) => {
+          row.style.display = "";
+        });
+
+      const yearRows = weeksTbody.querySelectorAll(".weeks-year-row");
+      yearRows.forEach((yrRow) => {
+        const year = Number(yrRow.dataset.year);
+
+        if (year < currentYear) {
+          // Entire past years collapsed (months + weeks hidden)
+          collapseYear(year);
+          return;
+        }
+
+        // Current / future years visible at year level
+        expandYear(year);
+
+        // Within this year, collapse past months
+        const monthRows = weeksTbody.querySelectorAll(
+          `.weeks-month-row[data-year="${year}"]`
+        );
+        monthRows.forEach((mRow) => {
+          const month = Number(mRow.dataset.month);
+
+          // Past months in this year collapsed (month header shown, weeks hidden)
+          if (year === currentYear && month < currentMonth) {
+            mRow.style.display = ""; // keep header visible
+            collapseMonth(year, month);
+          } else {
+            // Current & future months expanded by default
+            mRow.style.display = "";
+            expandMonth(year, month);
+          }
+        });
+      });
+    }
+
+    function wireWeekToggleHandlers() {
+      weeksTbody.querySelectorAll(".weeks-toggle").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const level = btn.dataset.level;
+          const year = Number(btn.dataset.year);
+          const month =
+            btn.dataset.month !== undefined
+              ? Number(btn.dataset.month)
+              : null;
+
+          if (level === "year") {
+            toggleYear(year);
+          } else if (level === "month" && month !== null) {
+            toggleMonth(year, month);
+          }
         });
       });
     }
