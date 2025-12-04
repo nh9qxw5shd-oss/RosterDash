@@ -1074,9 +1074,21 @@
     }
 
     function isEffectiveReadOnly() {
-      const role = currentProfile?.role || "viewer";
-      return isPublicViewer || role === "viewer" || forceReadOnly;
-    }
+  const role = currentProfile?.role || "viewer";
+
+  // Editor is read-only on draft weeks
+  const isEditorLocked =
+    role === "editor" &&
+    currentWeek &&
+    currentWeek.status === "draft";
+
+  return (
+    isPublicViewer ||
+    role === "viewer" ||
+    forceReadOnly ||
+    isEditorLocked
+  );
+}
 
     // Given week-ending date and day key, get actual Date (week ending = Saturday)
     function getDateForDay(weekEndingStr, dayKey) {
@@ -1341,7 +1353,7 @@ const btnChangeLog = document.getElementById("btn-change-log");
 
   newWeekDate.disabled = false;
   newWeekTemplateSelect.disabled = false;
-  btnCreateWeek.disabled = !(role === "editor" || role === "admin");
+ btnCreateWeek.disabled = !(role === "admin");
 
   syncTagTrayVisibility();
 
@@ -1409,10 +1421,10 @@ const btnChangeLog = document.getElementById("btn-change-log");
       if (!confirmDiscardChanges()) return;
 
       const role = currentProfile?.role || "viewer";
-      if (isPublicViewer || !(role === "editor" || role === "admin")) {
-        alert("You do not have permission to create weeks.");
-        return;
-      }
+if (isPublicViewer || role !== "admin") {
+  alert("You do not have permission to create weeks.");
+  return;
+}
 
       const dateStr = newWeekDate.value;
       const templateId = newWeekTemplateSelect.value;
@@ -1854,21 +1866,40 @@ const btnChangeLog = document.getElementById("btn-change-log");
     }
 
     function syncEditorButtons() {
-      const role = currentProfile?.role || "viewer";
-      const isEditor = role === "editor" || role === "admin";
-      const isDraft = currentWeek?.status === "draft";
+  const role = currentProfile?.role || "viewer";
+  const isAdmin = role === "admin";
+  const isEditor = role === "editor";
 
-      if (isPublicViewer || role === "viewer") {
-        btnSaveWeek.disabled = true;
-        btnPublishWeek.disabled = true;
-        btnPublishWeek.textContent = "Publish";
-        return;
-      }
+  if (!currentWeek) {
+    btnSaveWeek.disabled = true;
+    btnPublishWeek.disabled = true;
+    btnPublishWeek.textContent = "Publish";
+    return;
+  }
 
-      btnSaveWeek.disabled = !(isEditor && isDraft);
-      btnPublishWeek.disabled = !isEditor;
-      btnPublishWeek.textContent = isDraft ? "Publish" : "Re-publish";
-    }
+  const isDraft = currentWeek.status === "draft";
+
+  // Viewers & public: no controls
+  if (isPublicViewer || role === "viewer") {
+    btnSaveWeek.disabled = true;
+    btnPublishWeek.disabled = true;
+    btnPublishWeek.textContent = isDraft ? "Publish" : "Re-publish";
+    return;
+  }
+
+  if (isDraft) {
+    // Draft weeks: only Admin can touch
+    btnSaveWeek.disabled = !isAdmin;
+    btnPublishWeek.disabled = !isAdmin;
+    btnPublishWeek.textContent = "Publish";
+    } else {
+    // Published weeks:
+    // - Admin & Editor can edit and re-publish
+    btnSaveWeek.disabled = !(isAdmin || isEditor);
+    btnPublishWeek.disabled = !(isAdmin || isEditor);
+    btnPublishWeek.textContent = "Re-publish";
+  }
+}
 
     // ===== CLASSIFY SHIFTS =====
     function classifyShift(value, tags) {
@@ -2482,7 +2513,10 @@ async function saveVersionSnapshotForCurrentWeek() {
 
    btnPublishWeek.addEventListener("click", async () => {
   const role = currentProfile?.role || "viewer";
-  if (!currentWeek || isPublicViewer || role === "viewer") return;
+  const canPublish =
+    !isPublicViewer && (role === "admin" || role === "editor");
+
+  if (!currentWeek || !canPublish) return;
 
   const payload = {
     status: "published",
@@ -3318,7 +3352,7 @@ interestTd.appendChild(rankDiv);
         usageByName[u.name] = u;
       });
 
-      const names = new Set([
+            const names = new Set([
         ...Object.keys(usageByName),
         ...Object.keys(compBank || {})
       ]);
@@ -3326,7 +3360,7 @@ interestTd.appendChild(rankDiv);
       if (!names.size) return;
 
       const role = currentProfile?.role || "viewer";
-      const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
+      const canEditAllowances = !isPublicViewer && role === "admin";
 
       Array.from(names).sort().forEach((name) => {
         const usage = usageByName[name] || { al: 0, cl: 0 };
@@ -3372,7 +3406,7 @@ interestTd.appendChild(rankDiv);
         alInput.style.width = "4rem";
         alInput.dataset.type = "al-allowance";
         alInput.dataset.name = name;
-        if (!isEditor) alInput.disabled = true;
+        if (!canEditAllowances) alInput.disabled = true;
         tds[2].appendChild(alInput);
 
         if (alPct === null) {
@@ -3475,17 +3509,17 @@ interestTd.appendChild(rankDiv);
 
     // Save A/L allowances
     btnSaveAllowances.addEventListener("click", async () => {
-      const role = currentProfile?.role || "viewer";
-      const isEditor = !isPublicViewer && (role === "editor" || role === "admin");
-      if (!isEditor) {
-        alert("You do not have permission to edit allowances.");
-        return;
-      }
+  const role = currentProfile?.role || "viewer";
+  const isAdmin = !isPublicViewer && role === "admin";
+  if (!isAdmin) {
+    alert("You do not have permission to edit allowances.");
+    return;
+  }
 
-      if (!currentAnalyticsYear) {
-        alert("No analytics year selected.");
-        return;
-      }
+  if (!currentAnalyticsYear) {
+    alert("No analytics year selected.");
+    return;
+  }
 
       const rows = analyticsLeaveTbody.querySelectorAll("tr.leave-main-row");
       const payloads = [];
