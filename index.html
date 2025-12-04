@@ -365,6 +365,10 @@
       background: #ffff00;
       color: #854d0e;
     }
+.shift-12oc {
+  background: #b5b5b5;
+  color: #000000 !important;
+}
     .shift-al {
       background: #ff0000;
       color: #ffffff !important;
@@ -1868,44 +1872,49 @@ const btnChangeLog = document.getElementById("btn-change-log");
 
     // ===== CLASSIFY SHIFTS =====
     function classifyShift(value, tags) {
-      const classes = [];
-      const v = (value || "").trim().toUpperCase();
-      const tagSet = new Set((tags || []).map((t) => String(t).toUpperCase()));
+  const classes = [];
+  const v = (value || "").trim().toUpperCase();
+  const tagSet = new Set((tags || []).map((t) => String(t).toUpperCase()));
 
-      if (!v && tagSet.size === 0) return "";
+  if (!v && tagSet.size === 0) return "";
 
-      // Base on times / text
-      if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
-        classes.push("shift-day");
-      }
-      if (v.includes("1800-0600") || v.includes("1830-0630")) {
-        classes.push("shift-night");
-      }
-      if (v.includes("SPARE")) {
-        classes.push("shift-spare");
-      }
-      if (v === "N/A") {
-        classes.push("shift-oo");
-      }
-      if (v === "RD") {
-        classes.push("shift-rd");
-      }
+  // Base on times / text
+  if (v.includes("0600-1800") || v.includes("0700-1900") || v.includes("0630-1830")) {
+    classes.push("shift-day");
+  }
+  if (v.includes("1800-0600") || v.includes("1830-0630")) {
+    classes.push("shift-night");
+  }
+  if (v.includes("SPARE")) {
+    classes.push("shift-spare");
+  }
+  if (v === "N/A") {
+    classes.push("shift-oo");
+  }
+  if (v === "RD") {
+    classes.push("shift-rd");
+  }
 
-      // Based on tags OR legacy text markers
-      const hasAL = tagSet.has("AL") || v.includes("A/L");
-      const hasCL = tagSet.has("CL") || v.includes("C/L");
-      const hasSick = tagSet.has("SICK") || v.includes("SICK") || v.includes("S/L");
-      const hasBO = tagSet.has("BO") || v.includes("B.O");
-      const hasRop = tagSet.has("LROP") || tagSet.has("HROP") || v.includes("LROP") || v.includes("HROP");
+  // Based on tags OR legacy text markers
+  const hasAL   = tagSet.has("AL")   || v.includes("A/L");
+  const hasCL   = tagSet.has("CL")   || v.includes("C/L");
+  const hasSick = tagSet.has("SICK") || v.includes("SICK") || v.includes("S/L");
+  const hasBO   = tagSet.has("BO")   || v.includes("B.O");
+  const hasRop  = tagSet.has("LROP") || tagSet.has("HROP") || v.includes("LROP") || v.includes("HROP");
 
-      if (hasAL) classes.push("shift-al");
-      if (hasCL) classes.push("shift-cl");
-      if (hasSick) classes.push("shift-sick");
-      if (hasBO) classes.push("shift-bo");
-      if (hasRop) classes.push("shift-rop");
+  // 🔹 Only show grey 12+OC styling if it's NOT on AL / CL / SICK / BO
+  if (!hasAL && !hasCL && !hasSick && !hasBO && v.includes("12+OC")) {
+    classes.push("shift-12oc");
+  }
 
-      return classes.join(" ");
-    }
+  if (hasAL)   classes.push("shift-al");
+  if (hasCL)   classes.push("shift-cl");
+  if (hasSick) classes.push("shift-sick");
+  if (hasBO)   classes.push("shift-bo");
+  if (hasRop)  classes.push("shift-rop");
+
+  return classes.join(" ");
+}
 
     const BLOCKED_MODIFIERS = ["RDW", "A/L", "C/L", "LROP", "HROP", "B.O", "SICK", "HGD"];
 
