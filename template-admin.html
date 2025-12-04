@@ -243,6 +243,11 @@
       background: #ffff00;
       color: #854d0e;
     }
+.shift-12oc {
+  background: #b5b5b5 !important;
+  color: #000000 !important;
+  text-decoration: none !important;
+}
     .shift-al {
       background: #ff0000;
       color: #ffffff !important;
@@ -667,6 +672,9 @@
       if (v.includes("SPARE")) {
         classes.push("shift-spare");
       }
+if (v.includes("12+OC")) {
+  classes.push("shift-12oc");
+}
       if (v === "N/A") {
         classes.push("shift-oo");
       }
