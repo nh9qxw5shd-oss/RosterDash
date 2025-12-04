@@ -744,18 +744,25 @@
       <!-- Week list -->
       <div class="card no-print">
         <div class="flex-between">
-          <div>
-            <h2>Roster weeks</h2>
-            <p class="muted">Draft & published rosters, one record per week ending.</p>
-          </div>
-          <div class="flex">
-            <input type="date" id="new-week-date" />
-            <select id="new-week-template">
-              <option value="">Template…</option>
-            </select>
-            <button id="btn-create-week" class="btn btn-primary">New draft from template</button>
-          </div>
-        </div>
+  <div>
+    <h2>Roster weeks</h2>
+    <p class="muted">Draft & published rosters, one record per week ending.</p>
+  </div>
+  <div class="flex">
+    <label class="muted" style="font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;">
+      Link:
+      <select id="link-selector">
+        <option value="CTRL">Control</option>
+        <option value="SNDM">SNDM</option>
+      </select>
+    </label>
+    <input type="date" id="new-week-date" />
+    <select id="new-week-template">
+      <option value="">Template…</option>
+    </select>
+    <button id="btn-create-week" class="btn btn-primary">New draft from template</button>
+  </div>
+</div>
         <div class="mt-2 table-scroll-x">
           <table id="weeks-table">
             <thead>
@@ -1031,6 +1038,7 @@
     let currentWeek = null;
     let isPublicViewer = false;
     let forceReadOnly = false;
+    let currentLink = "CTRL";
 
     let lastUsageStats = [];
     let currentAnalyticsYear = null;
@@ -1099,6 +1107,28 @@
 
     const newWeekTemplateSelect = document.getElementById("new-week-template");
     const weeksTbody = document.getElementById("weeks-tbody");
+    const linkSelector = document.getElementById("link-selector");
+
+    if (linkSelector) {
+      linkSelector.addEventListener("change", async () => {
+        if (!confirmDiscardChanges()) {
+          // revert selector if user cancels
+          linkSelector.value = currentLink;
+          return;
+        }
+        currentLink = linkSelector.value || "CTRL";
+        currentWeek = null;
+        editorCard.classList.add("hidden");
+        hasUnsavedChanges = false;
+
+        await loadTemplates();
+        await loadWeeks();
+        await loadAnalyticsYears();
+        await refreshAnalytics();
+        await refreshExpiryWatch();
+        await refreshShiftMarket();
+      });
+    }
 
 // Collapsible Year → Month → Week behaviour for roster weeks table
 weeksTbody.addEventListener("click", (e) => {
@@ -1351,9 +1381,10 @@ const btnChangeLog = document.getElementById("btn-change-log");
 
     // ===== TEMPLATES =====
     async function loadTemplates() {
-      const { data, error } = await supabase
+            const { data, error } = await supabase
         .from("roster_templates")
         .select("id, name, code")
+        .eq("link", currentLink)
         .order("code", { ascending: true });
 
       if (error) {
@@ -1399,12 +1430,13 @@ const btnChangeLog = document.getElementById("btn-change-log");
       }
 
       const label = `Week - Ending ${formatUK(dateStr)}`;
-      const payload = {
+            const payload = {
         week_ending: dateStr,
         label,
         status: "draft",
         template_id: tmpl.id,
         data: tmpl.structure,
+        link: currentLink
       };
 
       const { data, error } = await supabase
@@ -1428,11 +1460,12 @@ const btnChangeLog = document.getElementById("btn-change-log");
 
     // ===== WEEK LIST =====
        async function loadWeeks() {
-      const { data, error } = await supabase
+            const { data, error } = await supabase
         .from("roster_weeks")
         .select(
           "id, week_ending, label, status, template_id, created_at, published_at, data, roster_templates(name, code)"
         )
+        .eq("link", currentLink)
         .order("week_ending", { ascending: false });
 
       if (error) {
@@ -2491,9 +2524,10 @@ async function saveVersionSnapshotForCurrentWeek() {
 
     // ===== ANALYTICS =====
     async function loadAnalyticsYears() {
-      const { data, error } = await supabase
+            const { data, error } = await supabase
         .from("roster_weeks")
         .select("week_ending")
+        .eq("link", currentLink)
         .order("week_ending", { ascending: false });
 
       if (error) {
@@ -2557,10 +2591,11 @@ if (btnChangeLog) {
       leaveAllowancesByName = {};
       currentAnalyticsYear = year;
 
-      const { data, error } = await supabase
+            const { data, error } = await supabase
         .from("leave_allowances")
         .select("id, staff_name, year, al_allowance, cl_base_allowance")
-        .eq("year", year);
+        .eq("year", year)
+        .eq("link", currentLink);
 
       if (error) {
         console.error("loadLeaveAllowances error", error);
@@ -2821,9 +2856,10 @@ if (btnChangeLog) {
       const start = `${year}-01-01`;
       const end = `${year}-12-31`;
 
-      const { data: yearWeeks, error: yearErr } = await supabase
+            const { data: yearWeeks, error: yearErr } = await supabase
         .from("roster_weeks")
         .select("id, week_ending, label, data")
+        .eq("link", currentLink)
         .gte("week_ending", start)
         .lte("week_ending", end)
         .order("week_ending", { ascending: true });
@@ -2840,9 +2876,10 @@ if (btnChangeLog) {
 
       // 2) Full-history comp bank
       const today = new Date();
-      const { data: allWeeks, error: allErr } = await supabase
+            const { data: allWeeks, error: allErr } = await supabase
         .from("roster_weeks")
         .select("id, week_ending, data")
+        .eq("link", currentLink)
         .order("week_ending", { ascending: true });
 
       if (allErr) {
@@ -2955,10 +2992,11 @@ function computeShiftMarketStatus(entry, interested, today) {
 
       let weeksData = [];
       try {
-        const { data, error } = await supabase
+                const { data, error } = await supabase
           .from("roster_weeks")
           .select("id, week_ending, label, status, data")
           .eq("status", "published")
+          .eq("link", currentLink)
           .gte("week_ending", todayStr)
           .order("week_ending", { ascending: true });
 
@@ -3020,9 +3058,10 @@ function computeShiftMarketStatus(entry, interested, today) {
       // Load existing interest registrations (if table exists)
       let interestRows = [];
       try {
-        const { data: interestData, error: interestErr } = await supabase
+                const { data: interestData, error: interestErr } = await supabase
           .from("shift_market_interest")
-          .select("id, week_id, section_id, day_key, slot, staff_name, created_at");
+          .select("id, week_id, section_id, day_key, slot, staff_name, created_at, link")
+          .eq("link", currentLink);
 
         if (interestErr) {
           console.warn("refreshShiftMarket interest error", interestErr);
@@ -3127,17 +3166,18 @@ function computeShiftMarketStatus(entry, interested, today) {
           }
 
           try {
-            const payload = {
+                        const payload = {
               week_id: e.weekId,
               section_id: e.sectionId,
               day_key: e.dayKey,
               slot: e.slot,
-              staff_name: chosenName
+              staff_name: chosenName,
+              link: currentLink
             };
             const { error } = await supabase
               .from("shift_market_interest")
               .upsert(payload, {
-                onConflict: "week_id,section_id,day_key,slot,staff_name"
+                onConflict: "week_id,section_id,day_key,slot,staff_name,link"
               });
             if (error) {
               console.warn("Register interest error", error);
@@ -3450,11 +3490,12 @@ interestTd.appendChild(rankDiv);
         const alInput = tr.querySelector('input[data-type="al-allowance"]');
         const alAllowance = alInput ? Number(alInput.value || "0") : 0;
 
-        payloads.push({
+                payloads.push({
           staff_name: name,
           year: Number(currentAnalyticsYear),
           al_allowance: alAllowance,
-          cl_base_allowance: 0
+          cl_base_allowance: 0,
+          link: currentLink
         });
       });
 
@@ -3464,7 +3505,7 @@ interestTd.appendChild(rankDiv);
 
       const { error } = await supabase
         .from("leave_allowances")
-        .upsert(payloads, { onConflict: "staff_name,year" });
+               .upsert(payloads, { onConflict: "staff_name,year,link" });
 
       if (error) {
         console.error("save allowances error", error);
@@ -3825,9 +3866,10 @@ async function showChangeLog() {
       const today = new Date();
       const oneYearAgo = addDays(today, -365);
 
-      const { data, error } = await supabase
+            const { data, error } = await supabase
         .from("roster_weeks")
         .select("id, week_ending, data")
+        .eq("link", currentLink)
         .gte("week_ending", oneYearAgo.toISOString().slice(0, 10))
         .lte("week_ending", today.toISOString().slice(0, 10))
         .order("week_ending", { ascending: true });
