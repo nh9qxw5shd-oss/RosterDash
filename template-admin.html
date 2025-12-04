@@ -351,10 +351,18 @@
               Edit the <strong>base roster structures</strong> used when creating new weeks.
             </p>
           </div>
-          <div class="flex">
-            <button id="btn-new-template" class="btn btn-sm">New blank template</button>
-            <a href="index.html" class="btn btn-sm">Back to roster</a>
-          </div>
+                <div class="flex">
+        <label class="muted" style="font-size:0.75rem;display:flex;align-items:center;gap:0.25rem;">
+          Link:
+          <select id="link-selector">
+            <option value="CTRL">Control</option>
+            <option value="SNDM">SNDM</option>
+          </select>
+        </label>
+        <button id="btn-new-template" class="btn btn-sm">New blank template</button>
+        <a href="index.html" class="btn btn-sm">Back to roster</a>
+      </div>
+
         </div>
       </div>
 
@@ -417,6 +425,8 @@
     let currentProfile = null;
     let templates = [];
     let currentTemplate = null;
+    let currentLink = "CTRL";
+
 
     // ===== DOM =====
     const authCard = document.getElementById("auth-card");
@@ -436,6 +446,8 @@
     const templateEditor = document.getElementById("template-editor");
     const templateStatus = document.getElementById("template-status");
     const btnNewTemplate = document.getElementById("btn-new-template");
+    const linkSelector = document.getElementById("link-selector");
+
 
     const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
     const dayLabels = {
@@ -520,6 +532,10 @@
       blockedCard.classList.add("hidden");
       appEl.classList.remove("hidden");
 
+      if (linkSelector) {
+        currentLink = linkSelector.value || "CTRL";
+      }
+
       await loadTemplates();
     }
 
@@ -532,11 +548,24 @@
       }
     })();
 
+    // React to link changes (Control / SNDM)
+    if (linkSelector) {
+      linkSelector.addEventListener("change", async () => {
+        currentLink = linkSelector.value || "CTRL";
+        currentTemplate = null;
+        templateEditor.innerHTML =
+          `<p class="muted">Select a template on the left or create a new blank one.</p>`;
+        templateStatus.textContent = "";
+        await loadTemplates();
+      });
+    }
+
     // ===== Templates =====
     async function loadTemplates() {
-      const { data, error } = await supabase
+            const { data, error } = await supabase
         .from("roster_templates")
-        .select("id, name, code, structure")
+        .select("id, name, code, structure, link")
+        .eq("link", currentLink)
         .order("code", { ascending: true });
 
       if (error) {
@@ -583,10 +612,11 @@
 
     function openTemplate(tmpl) {
       // Work on a shallow copy and deep clone structure so we don't mutate list accidentally
-      currentTemplate = {
+            currentTemplate = {
         id: tmpl.id,
         name: tmpl.name || "",
         code: tmpl.code || "",
+        link: tmpl.link || currentLink,
         structure: normalizeStructure(tmpl.structure)
       };
       renderTemplateEditor();
@@ -927,14 +957,15 @@
 
       templateStatus.textContent = "Saving…";
 
-      let result;
+           let result;
       if (currentTemplate.id) {
         result = await supabase
           .from("roster_templates")
           .update({
             code,
             name,
-            structure
+            structure,
+            link: currentLink
           })
           .eq("id", currentTemplate.id)
           .select("*")
@@ -945,7 +976,8 @@
           .insert({
             code,
             name,
-            structure
+            structure,
+            link: currentLink
           })
           .select("*")
           .single();
