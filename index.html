@@ -1029,13 +1029,17 @@
   </datalist>
 
   <script>
+(() => {
     // ===== CONFIG =====
     const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
     const SUPABASE_ANON_KEY =
       "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM";
 
     const { createClient } = window.supabase;
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+     // Reuse client if script is evaluated more than once
+  window.__sbClient = window.__sbClient || createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabase = window.__sbClient;
 
     let currentUser = null;
     let currentProfile = null;
@@ -4035,6 +4039,8 @@ async function showChangeLog() {
         analyticsExpiryTbody.appendChild(tr);
       });
     }
+
+})();
   </script>
 </body>
 </html>
