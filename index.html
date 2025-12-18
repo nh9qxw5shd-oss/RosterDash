@@ -9,706 +9,273 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
   <style>
-    /* ===== Global layout ===== */
-    html, body {
-      width: 100%;
-      max-width: 100%;
-      margin: 0;
-      padding: 0;
-      overflow-x: auto;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #d8dce3;
-      color: #0f172a;
-    }
+:root{
+  --bg: #f3f4f6;
+  --card: #ffffff;
+  --ink: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --header: #111827;
+  --header-ink: #f9fafb;
+  --accent: #3b82f6;
+  --accent-2: #2563eb;
+  --danger: #ef4444;
+  --shadow: 0 1px 2px rgba(17,24,39,.08);
+  --radius: 14px;
+}
 
-    header {
-      padding: 0.75rem 1rem;
-      background: #f5f6f8;
-      border-bottom: 1px solid #b8bfc9;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 1.2rem;
-      font-weight: 600;
-      color: #0f172a;
-    }
-    header span {
-      font-size: 0.85rem;
-      color: #475569;
-    }
+html, body{
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
 
-    .container {
-      padding: 0.75rem 1rem;
-      max-width: 100%;
-      width: 100%;
-      margin: 0;
-    }
+header{
+  background: var(--header);
+  color: var(--header-ink);
+  padding: 0.9rem 1.2rem;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
 
-    .card {
-      background: #f2f3f5;
-      border-radius: 0.75rem;
-      border: 1px solid #b8bfc9;
-      padding: 1rem 1.25rem;
-      margin-bottom: 1rem;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-    }
-    .card h2 {
-      margin: 0 0 0.5rem;
-      font-size: 1rem;
-      color: #0f172a;
-    }
-    .muted {
-      color: #475569;
-      font-size: 0.8rem;
-    }
-
-    /* ===== Buttons ===== */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.3rem;
-      padding: 0.45rem 0.8rem;
-      border-radius: 999px;
-      border: 1px solid #b8bfc9;
-      background: #e2e6eb;
-      color: #0f172a;
-      font-size: 0.8rem;
-      cursor: pointer;
-      transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
-    }
-    .btn:hover {
-      background: #d5d9e2;
-      border-color: #aeb6c4;
-      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
-    }
-    .btn-primary {
-      border-color: #2563eb;
-      background: #3b82f6;
-      color: #ffffff;
-    }
-    .btn-primary:hover {
-      background: #2563eb;
-      border-color: #1d4ed8;
-    }
-    .btn-danger {
-      border-color: #dc2626;
-      background: #ef4444;
-      color: #ffffff;
-    }
-    .btn-sm {
-      padding: 0.25rem 0.6rem;
-      font-size: 0.7rem;
-    }
-
-    /* Tag tray buttons */
-    .tag-tray-btn-active {
-      background: #1f2937;
-      color: #f9fafb;
-      border-color: #111827;
-    }
-
-    /* ===== Inputs & selects ===== */
-    input, select, textarea {
-      background: #f3f4f6;
-      border-radius: 0.4rem;
-      border: 1px solid #b8bfc9;
-      color: #0f172a;
-      padding: 0.35rem 0.55rem;
-      font-size: 0.8rem;
-      box-sizing: border-box;
-    }
-    input::placeholder {
-      color: #9ca3af;
-    }
-    input:focus, select:focus, textarea:focus {
-      outline: 2px solid #3b82f6;
-      outline-offset: 1px;
-      border-color: #3b82f6;
-    }
-
-    /* ===== Table / roster area ===== */
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      font-size: 0.8rem;
-      background: #e3e6ee; /* darker so it stands out from card */
-    }
-    th, td {
-      border: 1px solid #b8bfc9;
-      padding: 0.3rem 0.4rem;
-      text-align: center;
-      vertical-align: top;
-    }
-    thead {
-      background: #d3d7e0; /* a shade darker than before */
-      position: sticky;
-      top: 0;
-      z-index: 2;
-    }
-    thead th {
-      font-weight: 600;
-      color: #0f172a;
-    }
-
-    .roster-grid {
-      max-width: 100%;
-      width: 100%;
-      max-height: 70vh;
-      overflow-y: auto;
-      overflow-x: auto;
-      margin-top: 0.5rem;
-      background: #eef0f3;
-      border-radius: 0.5rem;
-      border: 1px solid #c4c9d2;
-      padding: 0.25rem;
-    }
-
-    /* Horizontal scroll helper for wide tables */
-    .table-scroll-x {
-      width: 100%;
-      overflow-x: auto;
-    }
-
-    /* Tight name & remarks columns */
-    .roster-grid table th:first-child,
-    .roster-grid table td:first-child {
-      width: 130px;
-      max-width: 130px;
-    }
-
-    .roster-grid table th:last-child,
-    .roster-grid table td:last-child {
-      width: 160px;
-      max-width: 160px;
-    }
-
-    /* Name input: clamp horizontally, ellipsis if too long */
-    .roster-grid table td:first-child input {
-      width: 100%;
-      font-size: 0.8rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Remarks: allow vertical growth */
-    .remark-input {
-      width: 100%;
-      font-size: 0.75rem;
-      min-height: 1.6rem;
-      resize: vertical;
-      box-sizing: border-box;
-    }
-
-/* Roster weeks hierarchy rows */
-#weeks-tbody tr.year-row td {
-  background: #cbd5e1;
+header h1{
+  margin: 0;
+  font-size: 1.15rem;
   font-weight: 700;
+  letter-spacing: .2px;
+}
+
+header .muted, header span{
+  color: rgba(249,250,251,.75);
+}
+
+.container{
+  padding: 0.9rem 1.1rem 1.6rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.card{
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.card h2, .card h3{
+  margin: 0 0 .5rem;
+  color: var(--ink);
+}
+
+.muted{
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.flex{ display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; }
+.flex-between{ display:flex; align-items:center; justify-content:space-between; gap:.55rem; flex-wrap:wrap; }
+
+.mt-1{ margin-top:.25rem; }
+.mt-2{ margin-top:.5rem; }
+.mt-3{ margin-top:.75rem; }
+.mb-1{ margin-bottom:.25rem; }
+
+/* Controls */
+input, select, textarea{
+  background: #f9fafb;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  color: var(--ink);
+  padding: .38rem .55rem;
+  font-size: .82rem;
+  box-sizing: border-box;
+}
+input::placeholder{ color: #9ca3af; }
+input:focus, select:focus, textarea:focus{
+  outline: 2px solid rgba(59,130,246,.35);
+  outline-offset: 2px;
+  border-color: var(--accent);
+}
+
+/* Buttons */
+.btn{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  padding: .45rem .85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: #f9fafb;
+  color: var(--ink);
+  font-size: .82rem;
+  cursor:pointer;
+  transition: transform .05s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+  text-decoration:none;
+  user-select:none;
+}
+.btn:hover{
+  background: #eef2f7;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(17,24,39,.10);
+}
+.btn:active{ transform: translateY(1px); }
+
+.btn-primary{
+  border-color: rgba(59,130,246,.6);
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover{
+  background: var(--accent-2);
+  border-color: rgba(37,99,235,.85);
+}
+
+.btn-sm{ padding:.28rem .65rem; font-size:.74rem; }
+
+.btn-danger{
+  border-color: rgba(239,68,68,.75);
+  background: var(--danger);
+  color:#fff;
+}
+
+/* Tables */
+.table-scroll-x{ overflow:auto; border-radius: 12px; border:1px solid var(--border); }
+table{
+  border-collapse: collapse;
+  width: 100%;
+  font-size: .82rem;
+  background: #fff;
+}
+th, td{
+  border: 1px solid var(--border);
+  padding: .34rem .45rem;
   text-align: left;
-  cursor: pointer;
+  vertical-align: top;
+}
+thead{
+  background: #111827;
+}
+thead th{
+  color: #f9fafb;
+  font-weight: 700;
+  border-color: rgba(255,255,255,.10);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
-#weeks-tbody tr.month-row td {
-  background: #e5e7eb;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  padding-left: 1.5rem;
+/* Roster-specific layout */
+.roster-grid{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
 }
 
-.year-toggle,
-.month-toggle {
-  display: inline-block;
-  width: 1rem;
-  text-align: center;
-  margin-right: 0.25rem;
-  font-size: 0.8rem;
+.coverage-panel{
+  background: #fff;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  padding: .9rem 1.1rem;
+  box-shadow: var(--shadow);
 }
 
-    /* ===== Desktop roster sizing ===== */
-    .roster-grid table.roster-table {
-      table-layout: fixed;
-    }
-
-    .roster-grid table.roster-table th,
-    .roster-grid table.roster-table td {
-      padding: 0.25rem 0.3rem;
-      font-size: 0.78rem;
-    }
-
-    .roster-grid table.roster-table th:nth-child(1),
-    .roster-grid table.roster-table td:nth-child(1) {
-      width: 180px;
-      max-width: 180px;
-    }
-
-    .roster-grid table.roster-table th:nth-child(2),
-    .roster-grid table.roster-table td:nth-child(2),
-    .roster-grid table.roster-table th:nth-child(3),
-    .roster-grid table.roster-table td:nth-child(3),
-    .roster-grid table.roster-table th:nth-child(4),
-    .roster-grid table.roster-table td:nth-child(4),
-    .roster-grid table.roster-table th:nth-child(5),
-    .roster-grid table.roster-table td:nth-child(5),
-    .roster-grid table.roster-table th:nth-child(6),
-    .roster-grid table.roster-table td:nth-child(6),
-    .roster-grid table.roster-table th:nth-child(7),
-    .roster-grid table.roster-table td:nth-child(7),
-    .roster-grid table.roster-table th:nth-child(8),
-    .roster-grid table.roster-table td:nth-child(8) {
-      width: 70px;
-      max-width: 70px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .roster-grid table.roster-table th:nth-child(9),
-    .roster-grid table.roster-table td:nth-child(9) {
-      width: 220px;
-      max-width: 220px;
-    }
-
-    /* ===== Shift cell layout ===== */
-    .shift-cell-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.3rem; /* increased gap for more room under shifts */
-    }
-
-    .shift-input {
-      flex: 1;
-      min-width: 0;
-      background: #ffffff;
-      font-weight: 700;
-      color: #000000 !important;
-      font-size: 0.8rem;
-    }
-
-    /* Tag row under each shift */
-    .tag-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.15rem;
-    }
-    .tag-pill {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 0.05rem 0.35rem;
-      font-size: 0.6rem;
-      border: 1px solid #cbd5e1;
-      background: #f3f4f6;
-      color: #475569;
-      white-space: nowrap;
-    }
-    .tag-pill-rdw {
-      background: #2c2cd9;
-      border-color: #2c2cd9;
-      color: #ffffff;
-      font-weight: 700;
-    }
-    .tag-pill-al {
-      background: #ff0000;
-      border-color: #b91c1c;
-      color: #ffffff;
-      font-weight: 700;
-    }
-    .tag-pill-cl {
-      background: #f97316;
-      border-color: #ea580c;
-      color: #ffffff;
-      font-weight: 700;
-    }
-    .tag-pill-sick {
-      background: #4d7c0f;
-      border-color: #3f6212;
-      color: #ffffff;
-      font-weight: 700;
-    }
-    .tag-pill-bo {
-      background: #991b1b;
-      border-color: #7f1d1d;
-      color: #ffffff;
-      font-weight: 700;
-    }
-    .tag-pill-rop {
-      background: #c4b5fd;
-      border-color: #a855f7;
-      color: #312e81;
-      font-weight: 700;
-    }
-    .tag-pill-hgd {
-      background: #e5e7eb;
-      border-color: #9ca3af;
-      color: #111827;
-    }
-
-    /* ===== Conditional formatting ===== */
-    .shift-day {
-      background: #f1a983;
-      color: #7c2d12;
-    }
-    .shift-night {
-      background: #4d93d9;
-      color: #1e3a8a;
-    }
-    .shift-spare {
-      background: #d86dcd;
-      color: #701a75;
-    }
-    .shift-oo {
-      background: #ffff00;
-      color: #854d0e;
-    }
-.shift-12oc {
-  background: #b5b5b5;
-  color: #000000 !important;
+.coverage-top-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:.75rem;
+  flex-wrap:wrap;
 }
-    .shift-al {
-      background: #ff0000;
-      color: #ffffff !important;
-      text-decoration: line-through;
-    }
-    .shift-cl {
-      background: #ff0000;
-      color: #ffffff !important;
-      text-decoration: line-through;
-    }
-    .shift-sick {
-      background: #4d7c0f;
-      color: #ffffff !important;
-      text-decoration: line-through;
-    }
-    .shift-rd {
-      background: #f3f4f6;
-      color: #6b7280;
-      font-style: italic;
-    }
-    .shift-bo {
-      background: #ff0000;
-      color: #ffffff !important;
-      text-decoration: line-through;
-    }
-    .shift-rop {
-      font-weight: 900;
-    }
 
-    /* Spare-origin marker (originally SPARE in base roster) */
-    .spare-origin-cell {
-      position: relative;
-    }
-    .spare-origin-cell::before {
-      content: "";
-      position: absolute;
-      left: 2px;
-      top: 2px;
-      bottom: 2px;
-      width: 4px;
-      border-radius: 999px;
-      background: #d86dcd;
-      pointer-events: none;
-    }
+.coverage-summary-text{
+  font-size: .85rem;
+  color: var(--muted);
+}
 
-    /* Tags and status pills */
-    .tag {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 0.15rem 0.4rem;
-      font-size: 0.7rem;
-      border: 1px solid #cbd2dd;
-      color: #4b5563;
-      background: #eef0f3;
-    }
-    .status-pill {
-      padding: 0.15rem 0.5rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      border: 1px solid #b8bfc9;
-      background: #f2f3f5;
-    }
-    .status-draft {
-      border-color: #f59e0b;
-      color: #92400e;
-      background: #fffbeb;
-    }
-    .status-published {
-      border-color: #22c55e;
-      color: #15803d;
-      background: #ecfdf3;
-    }
+.coverage-legend{
+  display:flex;
+  gap:.6rem;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.legend-item{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  font-size:.78rem;
+  color: var(--muted);
+  padding:.18rem .5rem;
+  border: 1px solid var(--border);
+  background: #f9fafb;
+  border-radius: 999px;
+}
+.legend-swatch{
+  width:10px; height:10px;
+  border-radius: 999px;
+  border: 1px solid rgba(17,24,39,.18);
+}
 
-    /* Layout helpers */
-    .flex {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-    .flex-between {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-    .mt-1 { margin-top: 0.25rem; }
-    .mt-2 { margin-top: 0.5rem; }
-    .mt-3 { margin-top: 0.75rem; }
-    .mb-1 { margin-bottom: 0.25rem; }
-    .mb-2 { margin-bottom: 0.5rem; }
-    .w-100 { width: 100%; }
-    .hidden { display: none; }
+/* Pills / status */
+.pill, .status-pill, .coverage-pill, .tag{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  border-radius: 999px;
+  padding: .14rem .5rem;
+  font-size: .74rem;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: #f9fafb;
+  white-space: nowrap;
+}
+.status-pill{
+  color: #111827;
+  border-color: rgba(17,24,39,.12);
+}
 
-    /* Alt row shading for per-person totals */
-    #analytics-usage-tbody tr:nth-child(even),
-    #analytics-leave-tbody tr:nth-child(even),
-    #analytics-expiry-tbody tr:nth-child(even) {
-      background: #e5e7eb;
-    }
+/* Tag tray buttons */
+.tag-tray-btn{
+  padding: .28rem .65rem;
+  font-size: .74rem;
+}
 
-    /* Coverage banner styling */
-    .coverage-panel {
-      background: #e0f2fe;
-      border-radius: 0.5rem;
-      border: 1px solid #bae6fd;
-      padding: 0.35rem 0.6rem;
-      font-size: 0.8rem;
-      color: #0f172a;
-    }
-    .coverage-top-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-    .coverage-pill {
-      border-radius: 999px;
-      padding: 0.15rem 0.6rem;
-      font-size: 0.75rem;
-      border: 1px solid transparent;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    .coverage-pill.cov-good {
-      background: #dcfce7;
-      border-color: #22c55e;
-      color: #166534;
-    }
-    .coverage-pill.cov-amber {
-      background: #fef9c3;
-      border-color: #facc15;
-      color: #854d0e;
-    }
-    .coverage-pill.cov-red {
-      background: #fee2e2;
-      border-color: #ef4444;
-      color: #991b1b;
-    }
-    .coverage-summary-text {
-      font-size: 0.8rem;
-      color: #0f172a;
-    }
-    .coverage-legend {
-      margin-top: 0.35rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      font-size: 0.75rem;
-      color: #475569;
-    }
-    .legend-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.25rem;
-    }
-    .legend-swatch {
-      width: 0.75rem;
-      height: 0.75rem;
-      border-radius: 0.2rem;
-      border: 1px solid #cbd5e1;
-    }
+/* Toggles / small buttons (when used as pills) */
+.weeks-toggle, .leave-toggle{
+  border-radius: 999px;
+}
 
-    /* Leave allowance RAG pills */
-    .leave-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 3.2rem;
-      padding: 0.1rem 0.45rem;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      border: 1px solid transparent;
-      white-space: nowrap;
-    }
-    .leave-green {
-      background: #dcfce7;
-      border-color: #22c55e;
-      color: #166534;
-    }
-    .leave-amber {
-      background: #fef9c3;
-      border-color: #facc15;
-      color: #854d0e;
-    }
-    .leave-red {
-      background: #fee2e2;
-      border-color: #ef4444;
-      color: #991b1b;
-    }
+/* Utility */
+.hidden{ display:none !important; }
+.error{ color:#b91c1c; font-size:.82rem; }
 
-    /* Highlight current day column: soft blue ring around inputs */
-    .today-col input {
-      box-shadow: 0 0 0 2px #93c5fd;
-      border-color: #3b82f6;
-    }
+.no-print{}
+@media print{
+  header, .no-print{ display:none !important; }
+  body{ background:#fff; }
+  .card{ box-shadow:none; border-color:#ddd; }
+}
 
-    /* ===== Mobile-optimised roster table ===== */
-    @media (max-width: 768px) {
-      .roster-grid {
-        max-height: 65vh;
-        overflow-x: auto;
-        overflow-y: auto;
-      }
-
-      .roster-grid table.roster-table th,
-      .roster-grid table.roster-table td {
-        padding: 0.15rem 0.2rem;
-        font-size: 0.7rem;
-      }
-
-      .roster-grid table.roster-table input.shift-input {
-        font-size: 0.7rem;
-        padding: 0.2rem 0.25rem;
-      }
-
-      .roster-grid table.roster-table {
-        table-layout: fixed;
-      }
-
-      .roster-grid table.roster-table th:nth-child(1),
-      .roster-grid table.roster-table td:nth-child(1) {
-        width: 110px;
-      }
-
-      .roster-grid table.roster-table th:nth-child(2),
-      .roster-grid table.roster-table th:nth-child(3),
-      .roster-grid table.roster-table th:nth-child(4),
-      .roster-grid table.roster-table th:nth-child(5),
-      .roster-grid table.roster-table th:nth-child(6),
-      .roster-grid table.roster-table th:nth-child(7),
-      .roster-grid table.roster-table th:nth-child(8),
-      .roster-grid table.roster-table td:nth-child(2),
-      .roster-grid table.roster-table td:nth-child(3),
-      .roster-grid table.roster-table td:nth-child(4),
-      .roster-grid table.roster-table td:nth-child(5),
-      .roster-grid table.roster-table td:nth-child(6),
-      .roster-grid table.roster-table td:nth-child(7),
-      .roster-grid table.roster-table td:nth-child(8) {
-        width: 52px;
-      }
-
-      .roster-grid table.roster-table th:nth-child(9),
-      .roster-grid table.roster-table td:nth-child(9) {
-        display: none;
-      }
-    }
-
-    /* Leave details expansion */
-    .leave-toggle {
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      font-size: 0.8rem;
-      padding: 0;
-      margin-right: 0.25rem;
-    }
-    .leave-detail-row td {
-      text-align: left;
-      font-size: 0.75rem;
-      background: #edf0f5;
-    }
-    .leave-detail-block h4 {
-      margin: 0.1rem 0;
-      font-size: 0.78rem;
-    }
-    .leave-detail-block ul {
-      margin: 0.1rem 0 0.4rem 1rem;
-      padding: 0;
-    }
-
-    /* ===== Roster weeks hierarchy ===== */
-    .weeks-year-row td {
-      background: #e5e7eb;
-      font-weight: 600;
-      text-align: left;
-      font-size: 0.85rem;
-    }
-
-    .weeks-month-row td {
-      background: #f3f4f6;
-      text-align: left;
-      padding-left: 1.75rem;
-      font-weight: 500;
-      font-size: 0.8rem;
-    }
-
-    .weeks-week-row td {
-      background: #ffffff;
-    }
-
-    .weeks-toggle {
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      margin-right: 0.35rem;
-      font-size: 0.8rem;
-    }
-
-    .weeks-year-row.collapsed td,
-    .weeks-month-row.collapsed td {
-      opacity: 0.85;
-    }
-
-    /* Print styling */
-    @media print {
-      body {
-        background: #ffffff;
-      }
-      .no-print {
-        display: none !important;
-      }
-      header {
-        display: none !important;
-      }
-      #editor-card {
-        border: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0;
-      }
-      .container {
-        padding: 0;
-        margin: 0;
-      }
-      .roster-grid {
-        max-height: none;
-        overflow: visible;
-        border: none;
-        padding: 0;
-        background: #ffffff;
-      }
-      table {
-        page-break-inside: avoid;
-      }
-    }
-  </style>
+/* Keep existing shift color classes if present in markup */
+.shift-day{ background:#f1a983 !important; color:#7c2d12 !important; }
+.shift-night{ background:#4d93d9 !important; color:#1e3a8a !important; }
+.shift-spare{ background:#d86dcd !important; color:#701a75 !important; }
+.shift-oo{ background:#ffff00 !important; color:#854d0e !important; }
+.shift-12oc{ background:#b5b5b5 !important; color:#000 !important; text-decoration:none !important; }
+.shift-al, .shift-cl, .shift-bo{ background:#ff0000 !important; color:#fff !important; text-decoration: line-through !important; }
+.shift-sick{ background:#4d7c0f !important; color:#fff !important; text-decoration: line-through !important; }
+.shift-rd{ background:#f3f4f6 !important; color:#6b7280 !important; font-style: italic !important; }
+.shift-rop{ font-weight:900 !important; }
+</style>
 </head>
 <body>
  <header class="no-print">
