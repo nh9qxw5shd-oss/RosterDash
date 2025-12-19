@@ -2804,14 +2804,28 @@ if (btnChangeLog) {
           })
           .sort((a, b) => a.date - b.date);
 
-        let usesLeft = rec.clUsedDates.length;
+        // Pair each CL use to a specific earned credit (FIFO, but only if valid at time of use)
+const usedDatesSorted = (rec.clUsedDates || [])
+  .slice()
+  .sort((a, b) => a - b);
 
-        for (let i = 0; i < credits.length && usesLeft > 0; i++) {
-          if (!credits[i].consumed) {
-            credits[i].consumed = true;
-            usesLeft--;
-          }
-        }
+rec.clUsePairs = []; // [{ useDate, earnDate }]
+
+usedDatesSorted.forEach((useDate) => {
+  // Find the earliest unconsumed credit that is still valid on the use date
+  const match = credits.find((c) => {
+    if (c.consumed) return false;
+    return c.expiry >= useDate; // token must not be expired at time of use
+  });
+
+  if (match) {
+    match.consumed = true;
+    rec.clUsePairs.push({ useDate, earnDate: match.date });
+  } else {
+    // No credit available (data inconsistency or missing history)
+    rec.clUsePairs.push({ useDate, earnDate: null });
+  }
+});
 
         const usableCredits = credits.filter(
           (c) => !c.consumed && c.expiry >= today
@@ -3398,18 +3412,38 @@ interestTd.appendChild(rankDiv);
         block.appendChild(clHeader);
         const clUl = document.createElement("ul");
         if (detail.clDates.length) {
-          detail.clDates
-            .sort((a, b) => a - b)
-            .forEach((d) => {
-              const li = document.createElement("li");
-              li.textContent = formatUK(d.toISOString());
-              clUl.appendChild(li);
-            });
-        } else {
-          const li = document.createElement("li");
-          li.textContent = "None recorded.";
-          clUl.appendChild(li);
-        }
+  // Build a lookup of CL-use-date -> earned-date(s)
+  const pairRows = (comp && comp.clUsePairs) ? comp.clUsePairs : [];
+  const earnQueueByUse = {};
+
+  pairRows.forEach((p) => {
+    const useKey = p.useDate ? p.useDate.toISOString().slice(0, 10) : "";
+    if (!useKey) return;
+    if (!earnQueueByUse[useKey]) earnQueueByUse[useKey] = [];
+    earnQueueByUse[useKey].push(p.earnDate);
+  });
+
+  // Render each CL date in the selected year, with earn date in brackets
+  detail.clDates
+    .sort((a, b) => a - b)
+    .forEach((d) => {
+      const useKey = d.toISOString().slice(0, 10);
+      const q = earnQueueByUse[useKey] || [];
+      const earnDate = q.length ? q.shift() : null;
+
+      const li = document.createElement("li");
+      if (earnDate) {
+        li.textContent = `${formatUK(d.toISOString())} (earned ${formatUK(earnDate.toISOString())})`;
+      } else {
+        li.textContent = `${formatUK(d.toISOString())} (earned date unknown)`;
+      }
+      clUl.appendChild(li);
+    });
+} else {
+  const li = document.createElement("li");
+  li.textContent = "None recorded.";
+  clUl.appendChild(li);
+}
         block.appendChild(clUl);
 
         // Valid credits
