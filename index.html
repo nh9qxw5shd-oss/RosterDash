@@ -203,31 +203,6 @@
       box-sizing: border-box;
     }
 
-/* Roster weeks hierarchy rows */
-#weeks-tbody tr.year-row td {
-  background: #cbd5e1;
-  font-weight: 700;
-  text-align: left;
-  cursor: pointer;
-}
-
-#weeks-tbody tr.month-row td {
-  background: #e5e7eb;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  padding-left: 1.5rem;
-}
-
-.year-toggle,
-.month-toggle {
-  display: inline-block;
-  width: 1rem;
-  text-align: center;
-  margin-right: 0.25rem;
-  font-size: 0.8rem;
-}
-
     /* ===== Desktop roster sizing ===== */
     .roster-grid table.roster-table {
       table-layout: fixed;
@@ -900,6 +875,7 @@
             </table>
           </div>
         </div>
+</div>
 
       <!-- Shift market -->
       <div id="shift-market-card" class="card no-print">
@@ -1149,49 +1125,6 @@
         await refreshShiftMarket();
       });
     }
-
-// Collapsible Year → Month → Week behaviour for roster weeks table
-weeksTbody.addEventListener("click", (e) => {
-  const yearRow = e.target.closest("tr.year-row");
-  if (yearRow) {
-    const year = yearRow.dataset.year;
-    const collapsed = yearRow.dataset.collapsed === "true";
-    const newCollapsed = !collapsed;
-    yearRow.dataset.collapsed = newCollapsed ? "true" : "false";
-
-    const icon = yearRow.querySelector(".year-toggle");
-    if (icon) icon.textContent = newCollapsed ? "▶" : "▼";
-
-    // Hide/show all rows for that year except the year header itself
-    weeksTbody.querySelectorAll(`tr[data-year="${year}"]`).forEach((row) => {
-      if (row === yearRow) return;
-      row.style.display = newCollapsed ? "none" : "";
-    });
-
-    return;
-  }
-
-  const monthRow = e.target.closest("tr.month-row");
-  if (monthRow) {
-    const year = monthRow.dataset.year;
-    const month = monthRow.dataset.month;
-    const collapsed = monthRow.dataset.collapsed === "true";
-    const newCollapsed = !collapsed;
-    monthRow.dataset.collapsed = newCollapsed ? "true" : "false";
-
-    const icon = monthRow.querySelector(".month-toggle");
-    if (icon) icon.textContent = newCollapsed ? "▶" : "▼";
-
-    // Hide/show only the week rows for this month/year
-    weeksTbody
-      .querySelectorAll(`tr.week-row[data-year="${year}"][data-month="${month}"]`)
-      .forEach((row) => {
-        row.style.display = newCollapsed ? "none" : "";
-      });
-
-    return;
-  }
-});
 
     const newWeekDate = document.getElementById("new-week-date");
     const btnCreateWeek = document.getElementById("btn-create-week");
@@ -1755,48 +1688,55 @@ if (isPublicViewer || role !== "admin") {
       }
     }
 
+function shouldAutoExpandMonth(year, monthIdx) {
+  const now = new Date();
+  const curKey = now.getFullYear() * 12 + now.getMonth();
+  const nextKey = curKey + 1;
+
+  const targetKey = year * 12 + monthIdx;
+  return targetKey === curKey || targetKey === nextKey;
+}
+
     function applyInitialWeekCollapse(currentYear, currentMonth) {
-      // Default: everything visible
-      weeksTbody
-        .querySelectorAll(
-          ".weeks-year-row, .weeks-month-row, .weeks-week-row"
-        )
-        .forEach((row) => {
-          row.style.display = "";
-        });
+  // Default: everything visible
+  weeksTbody
+    .querySelectorAll(".weeks-year-row, .weeks-month-row, .weeks-week-row")
+    .forEach((row) => {
+      row.style.display = "";
+    });
 
-      const yearRows = weeksTbody.querySelectorAll(".weeks-year-row");
-      yearRows.forEach((yrRow) => {
-        const year = Number(yrRow.dataset.year);
+  const yearRows = weeksTbody.querySelectorAll(".weeks-year-row");
+  yearRows.forEach((yrRow) => {
+    const year = Number(yrRow.dataset.year);
 
-        if (year < currentYear) {
-          // Entire past years collapsed (months + weeks hidden)
-          collapseYear(year);
-          return;
-        }
-
-        // Current / future years visible at year level
-        expandYear(year);
-
-        // Within this year, collapse past months
-        const monthRows = weeksTbody.querySelectorAll(
-          `.weeks-month-row[data-year="${year}"]`
-        );
-        monthRows.forEach((mRow) => {
-          const month = Number(mRow.dataset.month);
-
-          // Past months in this year collapsed (month header shown, weeks hidden)
-          if (year === currentYear && month < currentMonth) {
-            mRow.style.display = ""; // keep header visible
-            collapseMonth(year, month);
-          } else {
-            // Current & future months expanded by default
-            mRow.style.display = "";
-            expandMonth(year, month);
-          }
-        });
-      });
+    // Collapse all years before current year
+    if (year < currentYear) {
+      collapseYear(year);
+      return;
     }
+
+    // Keep current/future years expanded at year level (so month headers visible)
+    expandYear(year);
+
+    const monthRows = weeksTbody.querySelectorAll(
+      `.weeks-month-row[data-year="${year}"]`
+    );
+
+    monthRows.forEach((mRow) => {
+      const monthIdx = Number(mRow.dataset.month);
+
+      // Always show the month header row (it’s the clickable control)
+      mRow.style.display = "";
+
+      // Only auto-expand current month + next month. Everything else collapsed.
+      if (shouldAutoExpandMonth(year, monthIdx)) {
+        expandMonth(year, monthIdx);
+      } else {
+        collapseMonth(year, monthIdx);
+      }
+    });
+  });
+}
 
     function wireWeekToggleHandlers() {
       weeksTbody.querySelectorAll(".weeks-toggle").forEach((btn) => {
