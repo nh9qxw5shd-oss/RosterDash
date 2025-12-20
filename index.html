@@ -110,6 +110,11 @@
       border-color: #111827;
     }
 
+.uncovered-selected{
+  outline: 3px solid #111827;
+  outline-offset: 1px;
+}
+
     /* ===== Inputs & selects ===== */
     input, select, textarea {
       background: #f3f4f6;
@@ -894,8 +899,9 @@
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Credits expiring</th>
-                  <th>First expiry date</th>
+<th>Credits expiring</th>
+<th>First expiry date</th>
+<th>Earned on</th>
                 </tr>
               </thead>
               <tbody id="analytics-expiry-tbody"></tbody>
@@ -939,7 +945,6 @@
   </table>
 </div>
         </div>
-      </div>
       </div>
 
       <!-- Roster editor -->
@@ -1006,6 +1011,7 @@
         <!-- Tag tray (admin only) -->
         <div id="tag-tray" class="mt-2 no-print flex" style="align-items:center;flex-wrap:wrap;">
           <span class="muted" style="font-size:0.75rem;">Tag mode:</span>
+<button type="button" id="btn-award-shift" class="btn btn-sm">Award shift</button>
           <button type="button" class="btn btn-sm tag-tray-btn" data-tag="RDW">RDW</button>
           <button type="button" class="btn btn-sm tag-tray-btn" data-tag="AL">A/L</button>
           <button type="button" class="btn btn-sm tag-tray-btn" data-tag="CL">C/L</button>
@@ -1060,6 +1066,10 @@
     // Active tag from the tray (e.g. "AL", "RDW", "CLEAR")
     let activeTag = null;
 
+// ===== Award Shift mode =====
+let awardMode = false;
+let selectedUncovered = null; // { weekId, sectionId, dayKey, slot }
+
     // Tracks whether current roster has unsaved edits
     let hasUnsavedChanges = false;
 
@@ -1095,6 +1105,11 @@
     forceReadOnly ||
     isEditorLocked
   );
+}
+
+function canManageRoster() {
+  const role = currentProfile?.role || "viewer";
+  return !isPublicViewer && !forceReadOnly && (role === "admin" || role === "editor");
 }
 
     // Given week-ending date and day key, get actual Date (week ending = Saturday)
@@ -1185,6 +1200,35 @@ const btnChangeLog = document.getElementById("btn-change-log");
     const coverageSummary = document.getElementById("coverage-summary");
 
     const tagTray = document.getElementById("tag-tray");
+
+const btnAwardShift = document.getElementById("btn-award-shift");
+
+function setAwardMode(on) {
+  awardMode = !!on;
+  selectedUncovered = null;
+
+  if (btnAwardShift) {
+    btnAwardShift.classList.toggle("tag-tray-btn-active", awardMode);
+    btnAwardShift.textContent = awardMode ? "Award shift: ON" : "Award shift";
+  }
+}
+
+if (btnAwardShift) {
+  btnAwardShift.addEventListener("click", () => {
+    if (!canManageRoster()) {
+      alert("Awarding shifts is only available to Admin/Editor (not read-only).");
+      return;
+    }
+
+    // Turn off tag mode when award mode turns on
+    if (!awardMode) {
+      activeTag = null;
+      tagTray.querySelectorAll(".tag-tray-btn").forEach(b => b.classList.remove("tag-tray-btn-active"));
+    }
+
+    setAwardMode(!awardMode);
+  });
+}
 
     const shiftMarketCard = document.getElementById("shift-market-card");
     const shiftMarketBody = document.getElementById("shift-market-body");
@@ -2159,10 +2203,26 @@ function shouldAutoExpandMonth(year, monthIdx) {
             input.style.marginBottom = "2px";
 
             if (effectiveReadOnly) {
-              input.disabled = true;
-            } else {
-              input.addEventListener("input", handleUncoveredChange);
-            }
+  input.disabled = true;
+} else {
+  input.addEventListener("input", handleUncoveredChange);
+
+  // ✅ Award mode: clicking an uncovered slot selects it
+  input.addEventListener("click", () => {
+    if (!awardMode || !canManageRoster()) return;
+
+    selectedUncovered = {
+      weekId: currentWeek?.id,
+      sectionId: section.id,
+      dayKey: day,
+      slot
+    };
+
+    document.querySelectorAll(".uncovered-selected")
+      .forEach(el => el.classList.remove("uncovered-selected"));
+    input.classList.add("uncovered-selected");
+  });
+}
 
             td.appendChild(input);
           });
@@ -2211,10 +2271,11 @@ function shouldAutoExpandMonth(year, monthIdx) {
             input.setAttribute("list", "shift-presets");
 
             if (effectiveReadOnly) {
-              input.disabled = true;
-            } else {
-              input.addEventListener("input", handleShiftChange);
-            }
+  input.disabled = true;
+} else {
+  // ✅ correct handler for staff shift cells
+  input.addEventListener("input", handleShiftChange);
+}
 
             wrap.appendChild(input);
 
@@ -2242,16 +2303,57 @@ function shouldAutoExpandMonth(year, monthIdx) {
             wrap.appendChild(tagRow);
             td.appendChild(wrap);
 
-            // Apply tag from tray on cell click (but not when clicking the input or pills directly)
-            if (!effectiveReadOnly) {
-              td.addEventListener("click", (e) => {
-                const targetTag = e.target;
-                if (targetTag.tagName && targetTag.tagName.toLowerCase() === "input") return;
-                if (targetTag.classList && targetTag.classList.contains("tag-pill")) return;
-                if (!activeTag) return;
-                applyTagToCell(section.id, rowIndex, key);
-              });
-            }
+           // Cell click handler: Award mode first, then normal tag mode
+if (!effectiveReadOnly) {
+  td.addEventListener("click", async (e) => {
+    const target = e.target;
+
+    // Ignore pill clicks only
+    if (target.classList && target.classList.contains("tag-pill")) return;
+
+    // ===== AWARD MODE =====
+    if (awardMode && selectedUncovered && canManageRoster()) {
+      if (!selectedUncovered.weekId) {
+        alert("Open a week before awarding.");
+        return;
+      }
+
+      // Must award into the SAME day as the uncovered slot selected
+      if (key !== selectedUncovered.dayKey) {
+        alert(`That uncovered shift is for ${selectedUncovered.dayKey.toUpperCase()}. Click the matching day cell to award it.`);
+        return;
+      }
+
+      const staffName = (row.staff_name || "").trim();
+      if (!staffName) {
+        alert("That row has no staff name.");
+        return;
+      }
+
+      const ok = confirm(
+        `Award selected uncovered shift to ${staffName} on ${key.toUpperCase()}?`
+      );
+      if (!ok) return;
+
+      const success = await awardUncoveredShift({
+        weekId: selectedUncovered.weekId,
+        sectionId: selectedUncovered.sectionId, // source section (where uncovered lives)
+        dayKey: selectedUncovered.dayKey,
+        slot: selectedUncovered.slot,
+        staffName
+      });
+
+      if (success) {
+        setAwardMode(false);
+      }
+      return;
+    }
+
+    // ===== NORMAL TAG MODE =====
+    if (!activeTag) return;
+    applyTagToCell(section.id, rowIndex, key);
+  });
+}
 
             return td;
           }
@@ -2442,24 +2544,22 @@ function shouldAutoExpandMonth(year, monthIdx) {
       alert("Draft saved.");
     });
 
-async function saveVersionSnapshotForCurrentWeek() {
-  if (!currentWeek || !currentWeek.id || !currentWeek.data) return;
+async function saveVersionSnapshotForWeek(weekId, snapshotData) {
+  if (!weekId || !snapshotData) return;
 
   try {
     const { data: existing, error: loadErr } = await supabase
       .from("roster_week_revisions")
       .select("id")
-      .eq("week_id", currentWeek.id);
+      .eq("week_id", weekId);
 
-    if (loadErr) {
-      console.warn("saveVersionSnapshot load error", loadErr);
-    }
+    if (loadErr) console.warn("saveVersionSnapshot load error", loadErr);
 
     const nextVersion = (existing ? existing.length : 0) + 1;
 
     let snapshot;
     try {
-      snapshot = JSON.parse(JSON.stringify(currentWeek.data));
+      snapshot = JSON.parse(JSON.stringify(snapshotData));
     } catch (e) {
       console.warn("saveVersionSnapshot clone error", e);
       return;
@@ -2468,15 +2568,13 @@ async function saveVersionSnapshotForCurrentWeek() {
     const { error: insertErr } = await supabase
       .from("roster_week_revisions")
       .insert({
-        week_id: currentWeek.id,
+        week_id: weekId,
         snapshot,
         label: `V${nextVersion}`,
         created_by: currentUser?.id || null
       });
 
-    if (insertErr) {
-      console.warn("saveVersionSnapshot insert error", insertErr);
-    }
+    if (insertErr) console.warn("saveVersionSnapshot insert error", insertErr);
   } catch (e) {
     console.warn("saveVersionSnapshot exception", e);
   }
@@ -2514,7 +2612,7 @@ async function saveVersionSnapshotForCurrentWeek() {
   syncEditorButtons();
 
   // 🔹 Save a versioned snapshot: V1, V2, V3...
-  await saveVersionSnapshotForCurrentWeek();
+  await saveVersionSnapshotForWeek(currentWeek.id, currentWeek.data);
 
   hasUnsavedChanges = false;
 
@@ -2841,9 +2939,9 @@ rec.clUsePairs = []; // [{ useDate, earnDate }]
 usedDatesSorted.forEach((useDate) => {
   // Find the earliest unconsumed credit that is still valid on the use date
   const match = credits.find((c) => {
-    if (c.consumed) return false;
-    return c.expiry >= useDate; // token must not be expired at time of use
-  });
+  if (c.consumed) return false;
+  return c.date <= useDate && c.expiry >= useDate;
+});
 
   if (match) {
     match.consumed = true;
@@ -3008,6 +3106,172 @@ function computeShiftMarketStatus(entry, interested, today) {
   };
 }
 
+async function awardUncoveredShift({ weekId, sectionId, dayKey, slot, staffName }) {
+  if (!canManageRoster()) {
+    alert("Read-only users cannot award shifts.");
+    return false;
+  }
+
+  // 1) Load the target week fresh from DB (don’t trust UI state)
+  const { data: week, error: weekErr } = await supabase
+    .from("roster_weeks")
+    .select("id, status, week_ending, data")
+    .eq("id", weekId)
+    .single();
+
+  if (weekErr || !week) {
+    console.error("awardUncoveredShift load week error", weekErr);
+    alert("Unable to load roster week for awarding.");
+    return false;
+  }
+
+  const struct = week.data;
+  if (!struct || !Array.isArray(struct.sections)) {
+    alert("Roster data is missing or invalid.");
+    return false;
+  }
+
+  const section = struct.sections.find(s => String(s.id || "") === String(sectionId || ""));
+  if (!section) {
+    alert("Section not found in that roster week.");
+    return false;
+  }
+
+  ensureUncovered(section);
+
+  // 2) Pull the shift text from uncovered slot
+  const u = section.uncovered?.[dayKey];
+  const slots =
+    typeof u === "string"
+      ? { s1: u, s2: "" }
+      : { s1: u?.s1 || "", s2: u?.s2 || "" };
+
+  const shiftText = (slots[slot] || "").trim();
+  if (!shiftText) {
+    alert("That uncovered slot is already empty.");
+    return false;
+  }
+
+// 3) Find the staff row ANYWHERE in the roster (cross-section award)
+let targetSection = null;
+let row = null;
+
+for (const s of (struct.sections || [])) {
+  const rows = s.rows || [];
+  const found = rows.find(r => (r.staff_name || "").trim() === (staffName || "").trim());
+  if (found) {
+    targetSection = s;
+    row = found;
+    break;
+  }
+}
+
+if (!row || !targetSection) {
+  alert(`Staff member not found anywhere in this roster: ${staffName}`);
+  return false;
+}
+
+  if (!row.shifts) row.shifts = {};
+  if (!row.tags) row.tags = {};
+  ensureRowTags(row);
+
+  // 4) Determine if we must apply RDW tag
+  const prior = String(row.shifts?.[dayKey] || "").trim();
+const priorUpper = prior.toUpperCase();
+const priorTags = Array.isArray(row.tags?.[dayKey]) ? row.tags[dayKey] : [];
+const priorTagSet = new Set(priorTags.map(t => String(t).toUpperCase()));
+
+const wasEmpty = prior === "";
+const wasRD = priorUpper === "RD" || priorTagSet.has("RD"); // future-proof if you ever add RD tag
+const alreadyRDW = priorTagSet.has("RDW") || (row.rdw && row.rdw[dayKey]);
+
+  // 5) Write the shift into the person’s cell
+  row.shifts[dayKey] = shiftText;
+
+  // 6) Clear the uncovered slot
+  if (typeof section.uncovered?.[dayKey] === "string") {
+    // legacy string shape
+    section.uncovered[dayKey] = (slot === "s1") ? "" : section.uncovered[dayKey];
+  } else {
+    section.uncovered[dayKey][slot] = "";
+  }
+
+  // 7) If they were RD or empty (off), add RDW tag + rdw flag
+  if ((wasEmpty || wasRD) && !alreadyRDW) {
+    const tags = row.tags[dayKey] || [];
+    if (!tags.some(t => String(t).toUpperCase() === "RDW")) tags.push("RDW");
+    row.tags[dayKey] = tags;
+
+    if (!row.rdw) row.rdw = {};
+    row.rdw[dayKey] = true;
+  }
+
+  // 8) Save + publish in ONE atomic update
+const publishPayload = {
+  data: struct,
+  status: "published",
+  published_at: new Date().toISOString(),
+  last_published_data: struct
+};
+
+const { data: savedWeek, error: saveErr } = await supabase
+  .from("roster_weeks")
+  .update(publishPayload)
+  .eq("id", weekId)
+  .select("*")
+  .single();
+
+if (saveErr || !savedWeek) {
+  console.error("awardUncoveredShift save/publish error", saveErr);
+  alert("Unable to save/publish awarded shift to roster.");
+  return false;
+}
+
+// 8.5) Snapshot the published version (this is what drives change log)
+await saveVersionSnapshotForWeek(weekId, struct);
+
+
+  // 9) Delete interest records for that shift (clean slate)
+  // This removes ALL bids for that shift once it’s no longer uncovered.
+  try {
+    await supabase
+      .from("shift_market_interest")
+      .delete()
+      .eq("week_id", weekId)
+      .eq("section_id", sectionId || null)
+      .eq("day_key", dayKey)
+      .eq("slot", slot)
+      .eq("link", currentLink);
+  } catch (e) {
+    console.warn("awardUncoveredShift cleanup interest exception", e);
+  }
+
+  // 10) If the awarded week is currently open in editor, refresh it in UI
+  if (currentWeek && String(currentWeek.id) === String(weekId)) {
+    // reload the updated week and re-render
+    const { data: refreshed, error: refErr } = await supabase
+      .from("roster_weeks")
+      .select("*")
+      .eq("id", weekId)
+      .single();
+
+    if (!refErr && refreshed) {
+      currentWeek = refreshed;
+      ensureSpareOrigin(currentWeek.data);
+      renderRosterGrid(currentWeek.data);
+      updateCoverageBanner();
+      syncEditorButtons();
+      hasUnsavedChanges = false;
+    }
+  }
+
+  // 11) Refresh shift market + weeks list so the UI reflects reality
+  await loadWeeks();
+  await refreshShiftMarket();
+
+  return true;
+}
+
     async function refreshShiftMarket() {
       if (!shiftMarketTbody) return;
 
@@ -3111,7 +3375,7 @@ function computeShiftMarketStatus(entry, interested, today) {
 
       if (!entries.length) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="5" class="muted">No uncovered published shifts from the current week onwards.</td>`;
+        tr.innerHTML = `<td colspan="6" class="muted">No uncovered published shifts from the current week onwards.</td>`;
         shiftMarketTbody.appendChild(tr);
         return;
       }
@@ -3231,7 +3495,7 @@ rankDiv.style.marginTop = "0.25rem";
 if (interested.length) {
   rankDiv.textContent = "Ranked interest: ";
 
-  interested.forEach((r, idx) => {
+  interested.forEach((r) => {
     const u = usageMap[r.staff_name] || { rdwTotal: 0, rdwSun: 0 };
     const score = isSunday ? u.rdwSun : u.rdwTotal;
     const label = isSunday ? `Sun RDW: ${score}` : `RDW: ${score}`;
@@ -3244,42 +3508,86 @@ if (interested.length) {
     pill.style.marginRight = "0.35rem";
 
     pill.addEventListener("click", async () => {
-      const sure = confirm(
-        `Remove interest for ${r.staff_name} on this shift?`
+      // If read-only, keep the old behaviour (remove only)
+      if (!canManageRoster()) {
+        const sure = confirm(`Remove interest for ${r.staff_name} on this shift?`);
+        if (!sure) return;
+
+        const { error } = await supabase
+          .from("shift_market_interest")
+          .delete()
+          .eq("id", r.id);
+
+        if (error) {
+          console.warn("Remove interest error", error);
+          alert("Unable to remove interest.");
+          return;
+        }
+        await refreshShiftMarket();
+        return;
+      }
+
+      // Admin/editor: offer Award or Remove
+      const choice = prompt(
+        `Action for ${r.staff_name}?\nType:\n  A = Award shift\n  R = Remove interest\n\n(Anything else cancels)`
       );
-      if (!sure) return;
 
-      try {
-       const { error } = await supabase
-  .from("shift_market_interest")
-  .delete()
-  .eq("id", r.id);
+      if (!choice) return;
 
-if (error) {
-  console.warn("Remove interest error", error);
-  alert("Unable to remove interest.");
-  return;
-}
+      const c = choice.trim().toUpperCase();
+
+      if (c === "R") {
+        const sure = confirm(`Remove interest for ${r.staff_name} on this shift?`);
+        if (!sure) return;
+
+        const { error } = await supabase
+          .from("shift_market_interest")
+          .delete()
+          .eq("id", r.id);
+
+        if (error) {
+          console.warn("Remove interest error", error);
+          alert("Unable to remove interest.");
+          return;
+        }
 
         await refreshShiftMarket();
-      } catch (err) {
-        console.warn("Remove interest exception", err);
-        alert("Unable to remove interest.");
+        return;
       }
+
+      if (c === "A") {
+        const ok = confirm(
+          `Award this uncovered shift to ${r.staff_name}?\n\nThis will:\n- Remove it from Uncovered\n- Put it into their cell\n- Add RDW if they were RD/empty`
+        );
+        if (!ok) return;
+
+        const success = await awardUncoveredShift({
+          weekId: e.weekId,
+          sectionId: e.sectionId,
+          dayKey: e.dayKey,
+          slot: e.slot,
+          staffName: r.staff_name
+        });
+
+        if (success) {
+          alert(`Awarded to ${r.staff_name}.`);
+        }
+        return;
+      }
+
+      // else cancel
     });
 
+    // ✅ this was missing in your version
     rankDiv.appendChild(pill);
-
-    if (idx < interested.length - 1) {
-      const sep = document.createElement("span");
-      sep.textContent = " • ";
-      rankDiv.appendChild(sep);
-    }
   });
+
 } else {
   rankDiv.textContent = "No interest registered yet.";
 }
+
 interestTd.appendChild(rankDiv);
+
         tr.appendChild(interestTd);
         shiftMarketTbody.appendChild(tr);
       });
@@ -3491,10 +3799,17 @@ function heatTitle(label, value) {
 
       const li = document.createElement("li");
       if (earnDate) {
-        li.textContent = `${formatUK(d.toISOString())} (earned ${formatUK(earnDate.toISOString())})`;
-      } else {
-        li.textContent = `${formatUK(d.toISOString())} (earned date unknown)`;
-      }
+  const today = new Date();
+
+  const label =
+    earnDate > today
+      ? `${formatUK(earnDate.toISOString())} (future)`
+      : formatUK(earnDate.toISOString());
+
+  li.textContent = `${formatUK(d.toISOString())} (earned ${label})`;
+} else {
+  li.textContent = `${formatUK(d.toISOString())} (earned date unknown)`;
+}
       clUl.appendChild(li);
     });
 } else {
@@ -3940,28 +4255,62 @@ async function showChangeLog() {
 
     // ===== COMP LEAVE EXPIRY WATCH =====
     async function refreshExpiryWatch() {
-      analyticsExpiryTbody.innerHTML = "";
+  analyticsExpiryTbody.innerHTML = "";
 
-      const today = new Date();
-      const oneYearAgo = addDays(today, -365);
+  const today = new Date();
+  const horizon = addDays(today, COMP_EXPIRY_HORIZON_DAYS);
 
-            const { data, error } = await supabase
-        .from("roster_weeks")
-        .select("id, week_ending, data")
-        .eq("link", currentLink)
-        .gte("week_ending", oneYearAgo.toISOString().slice(0, 10))
-        .lte("week_ending", today.toISOString().slice(0, 10))
-        .order("week_ending", { ascending: true });
+  // Load ALL weeks (or at least enough history to cover 12 months back + uses)
+  // For watertight accuracy, load full history like analytics does.
+  const { data: allWeeks, error } = await supabase
+    .from("roster_weeks")
+    .select("id, week_ending, data")
+    .eq("link", currentLink)
+    .order("week_ending", { ascending: true });
 
-      if (error) {
-        console.error("refreshExpiryWatch error", error);
-        return;
-      }
+  if (error) {
+    console.error("refreshExpiryWatch error", error);
+    return;
+  }
 
-      const expiryStats = computeExpiryFromWeeks(data || []);
-      renderExpiryAnalytics(expiryStats);
-    }
+  // Use the SAME ledger logic as the leave page
+  const compBank = computeCompBankFromWeeks(allWeeks || [], today);
 
+  // Build expiry stats from remaining valid credits
+  const rows = [];
+
+  Object.entries(compBank || {}).forEach(([name, rec]) => {
+    const validDates = (rec.validCreditDates || []).slice(); // earn dates for unspent credits
+    if (!validDates.length) return;
+
+    // Convert earn dates -> expiry dates and check horizon
+    const expiring = validDates
+      .map((earnDate) => {
+        const expiry = new Date(earnDate.getTime());
+        expiry.setFullYear(expiry.getFullYear() + 1);
+        return { earnDate, expiry };
+      })
+      .filter((x) => x.expiry >= today && x.expiry <= horizon)
+      .sort((a, b) => a.expiry - b.expiry);
+
+    if (!expiring.length) return;
+
+   rows.push({
+  name,
+  expiringCount: expiring.length,
+  firstExpiry: expiring[0].expiry,
+  firstEarn: expiring[0].earnDate
+});
+  });
+
+  rows.sort(
+    (a, b) => a.firstExpiry - b.firstExpiry || a.name.localeCompare(b.name)
+  );
+
+  renderExpiryAnalytics(rows);
+}
+
+// THIS FUNCTION IS DEAD DO NOT USE
     function computeExpiryFromWeeks(weeks) {
       const usageMap = {};
       const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -4053,24 +4402,26 @@ async function showChangeLog() {
     }
 
     function renderExpiryAnalytics(rows) {
-      analyticsExpiryTbody.innerHTML = "";
-      if (!rows.length) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="3" class="muted">No comp leave credits nearing expiry.</td>`;
-        analyticsExpiryTbody.appendChild(tr);
-        return;
-      }
+  analyticsExpiryTbody.innerHTML = "";
 
-      rows.forEach((r) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td style="text-align:left;">${r.name}</td>
-          <td>${r.expiringCount}</td>
-          <td>${formatUK(r.firstExpiry.toISOString())}</td>
-        `;
-        analyticsExpiryTbody.appendChild(tr);
-      });
-    }
+  if (!rows || !rows.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="4" class="muted" style="text-align:left;">No C/L credits expiring within the next ${COMP_EXPIRY_HORIZON_DAYS} days.</td>`;
+    analyticsExpiryTbody.appendChild(tr);
+    return;
+  }
+
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="text-align:left;">${r.name}</td>
+      <td>${r.expiringCount}</td>
+      <td>${formatUK(r.firstExpiry.toISOString())}</td>
+      <td>${r.firstEarn ? formatUK(r.firstEarn.toISOString()) : ""}</td>
+    `;
+    analyticsExpiryTbody.appendChild(tr);
+  });
+}
 
 })();
   </script>
