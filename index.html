@@ -203,6 +203,33 @@
       box-sizing: border-box;
     }
 
+/* ===== Weekly trends heatmap (0–35) ===== */
+.hm{
+  font-weight: 700;
+  border-radius: 0.35rem;
+}
+
+/* 0 */
+.hm-0  { background:#dcfce7; color:#166534; }
+
+/* 1–5 */
+.hm-1  { background:#ecfccb; color:#3f6212; }
+
+/* 6–10 */
+.hm-2  { background:#fef9c3; color:#854d0e; }
+
+/* 11–15 */
+.hm-3  { background:#fed7aa; color:#9a3412; }
+
+/* 16–20 */
+.hm-4  { background:#fecaca; color:#991b1b; }
+
+/* 21–25 */
+.hm-5  { background:#fca5a5; color:#7f1d1d; }
+
+/* 26–35+ */
+.hm-6  { background:#7f1d1d; color:#ffffff; }
+
     /* ===== Desktop roster sizing ===== */
     .roster-grid table.roster-table {
       table-layout: fixed;
@@ -3258,24 +3285,55 @@ interestTd.appendChild(rankDiv);
       });
     }
 
-    function renderWeeklyAnalytics(rows) {
-      analyticsWeeklyTbody.innerHTML = "";
-      if (!rows.length) return;
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
 
-      rows.forEach((r) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${formatUK(r.weekEnding)}</td>
-          <td>${r.al}</td>
-          <td>${r.cl}</td>
-          <td>${r.sick}</td>
-          <td>${r.rdwTotal}</td>
-          <td>${r.rdwSun}</td>
-          <td>${r.uncovered}</td>
-        `;
-        analyticsWeeklyTbody.appendChild(tr);
-      });
-    }
+function heatBand0to35(value) {
+  const v = Number(value || 0);
+
+  if (v <= 0) return 0;     // 0
+  if (v <= 5) return 1;     // 1–5
+  if (v <= 10) return 2;    // 6–10
+  if (v <= 15) return 3;    // 11–15
+  if (v <= 20) return 4;    // 16–20
+  if (v <= 25) return 5;    // 21–25
+  return 6;                // 26–35+
+}
+
+function heatClass(value) {
+  const band = heatBand0to35(value);
+  return `hm hm-${band}`;
+}
+
+// Optional: tooltip text
+function heatTitle(label, value) {
+  return `${label}: ${value}`;
+}
+
+    function renderWeeklyAnalytics(rows) {
+  analyticsWeeklyTbody.innerHTML = "";
+  if (!rows.length) return;
+
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${formatUK(r.weekEnding)}</td>
+
+      <td class="${heatClass(r.al)}" title="${heatTitle("A/L days", r.al)}">${r.al}</td>
+      <td class="${heatClass(r.cl)}" title="${heatTitle("C/L days", r.cl)}">${r.cl}</td>
+      <td class="${heatClass(r.sick)}" title="${heatTitle("Sick days", r.sick)}">${r.sick}</td>
+
+      <td class="${heatClass(r.rdwTotal)}" title="${heatTitle("RDW (all)", r.rdwTotal)}">${r.rdwTotal}</td>
+      <td class="${heatClass(r.rdwSun)}" title="${heatTitle("RDW (Sun)", r.rdwSun)}">${r.rdwSun}</td>
+
+      <td class="${heatClass(r.uncovered)}" title="${heatTitle("Uncovered shifts", r.uncovered)}">${r.uncovered}</td>
+    `;
+
+    analyticsWeeklyTbody.appendChild(tr);
+  });
+}
 
     function renderUsageAnalytics(rows) {
       analyticsUsageTbody.innerHTML = "";
