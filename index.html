@@ -1964,24 +1964,47 @@ function shouldAutoExpandMonth(year, monthIdx) {
 
     const BLOCKED_MODIFIERS = ["RDW", "A/L", "C/L", "LROP", "HROP", "B.O", "SICK", "HGD"];
 
-    function enforceShiftInputRules(input) {
-      let original = input.value || "";
-      let working = original;
+    function enforceShiftInputRules(el){
+    // Goal: stop people accidentally typing shift modifiers into free-text fields.
+    // Old approach used substring regex matches, which hilariously nuked normal words.
+    if(!el || typeof el.value!=="string") return;
 
-      BLOCKED_MODIFIERS.forEach((tok) => {
-        const pattern = tok.replace(".", "\\.");
-        const re = new RegExp(pattern, "ig");
-        working = working.replace(re, "");
-      });
+    const raw = el.value;
+    // Split but keep whitespace so we don't smash formatting
+    const parts = raw.split(/(\s+)/);
 
-      // Normalise spaces
-      working = working.replace(/\s{2,}/g, " ").trim();
+    let hit = false;
+    for(let i=0;i<parts.length;i++){
+      const p = parts[i];
+      if(!p || /^\s+$/.test(p)) continue;
 
-      if (working !== original) {
-        alert("Shift modifiers cannot be typed into this cell, use the tags to complete this function");
-        input.value = working;
+      // Strip common punctuation from edges for matching (so "A/L," still counts)
+      const stripped = p.trim().replace(/^[\(\[\{<"']+|[\)\]\}>,"'.;:!?]+$/g, "");
+      const norm = stripped.toUpperCase();
+
+      // Direct-match only: token must be exactly a blocked modifier (case-insensitive)
+      if(BLOCKED_MODIFIERS.includes(norm)){
+        parts[i] = ""; // remove just the token
+        hit = true;
       }
     }
+
+    if(hit){
+      const cleaned = parts.join("").replace(/[ \t]{2,}/g, " ");
+      if(cleaned !== raw){
+        el.value = cleaned;
+        warnShiftModifierOnce();
+      }
+    }
+  }
+
+  let __lastShiftModifierWarn = 0;
+  function warnShiftModifierOnce(){
+    const now = Date.now();
+    if(now - __lastShiftModifierWarn < 1500) return; // throttle spammy popups
+    __lastShiftModifierWarn = now;
+    alert(`Shift modifiers (e.g., ${BLOCKED_MODIFIERS.join(", ")}) are controlled by the shift buttons/presets.\n\nIf you meant one of those tags, use the proper selector instead of typing it into free text.`);
+  }
 
     // Ensure uncovered structure supports two slots (s1, s2)
     function ensureUncovered(section) {
