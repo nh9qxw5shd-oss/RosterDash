@@ -24,43 +24,26 @@
     }
 
     *{box-sizing:border-box}
-    html, html{
-      }
-body{
+    body{
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:var(--bg);
       margin:0;
       color:var(--ink);
-      overflow-x:hidden;
-    }
-
-    /* Body offset so a fixed header never overlaps content (set precisely by JS) */
-    body{
-      padding-top: var(--hdrH, 92px);
     }
 
     header{
       background:var(--header);
       color:var(--headerInk);
-      position:fixed;
-      top:0; left:0; right:0;
-      width:100%;
-      z-index:10;
-      /* iOS safe areas */
-      padding-top: calc(.85rem + env(safe-area-inset-top));
-      padding-bottom: .85rem;
-      padding-left: calc(1.1rem + env(safe-area-inset-left));
-      padding-right: calc(1.1rem + env(safe-area-inset-right));
-    }
-    /* inner wrap keeps content aligned with main while header background stays full-bleed */
-    .headerInner{
-      max-width:1280px;
-      margin:0 auto;
+      /* iOS safe area so the header doesn't look like it's been guillotined */
+      padding: calc(.85rem + env(safe-area-inset-top)) 1.25rem .85rem;
       display:flex;
       justify-content:space-between;
       align-items:center;
       gap:.75rem;
-      flex-wrap:wrap;
+      flex-wrap:wrap; /* allow wrap on mobile instead of cutting off */
+      position:sticky;
+      top:0;
+      z-index:10;
     }
     header h1{
       font-size:1.05rem;
@@ -73,53 +56,30 @@ body{
     }
     header .env{
       font-size:.8rem;
-      opacity:.95;
+      opacity:.9;
       display:flex;
       align-items:center;
       justify-content:flex-end;
       gap:.5rem;
       flex-wrap:wrap;
+      /* no nowrap: on mobile it was forcing overflow and looking "cut off" */
     }
 
-    /* Mobile header: keep it compact (no cheap-looking deep banner) */
+    /* Mobile header polish */
     @media (max-width: 640px){
       header{
-        padding-top: calc(.45rem + env(safe-area-inset-top));
-        padding-bottom:.45rem;
-        padding-left: calc(.9rem + env(safe-area-inset-left));
-        padding-right: calc(.9rem + env(safe-area-inset-right));
-      }
-      .headerInner{
-        gap:.5rem;
-        align-items:flex-start;
+        padding: calc(.75rem + env(safe-area-inset-top)) 1rem .75rem;
+        align-items:stretch;
       }
       header h1{
-        font-size:.98rem;
         white-space:normal;
       }
       header .env{
         justify-content:flex-start;
+      }
+      header .env #btnBack{
         width:100%;
       }
-      /* Back button was making the header feel like a chunky billboard */
-      header .env #btnBack{
-        width:auto;
-        max-width:220px;
-        margin:0 auto;
-        text-align:center;
-        padding:.45rem .7rem;
-        font-size:.85rem;
-      }
-      header .env .pill{
-        max-width:100%;
-        white-space:normal;
-      }
-    }
-
-    /* Extra-tight phones */
-    @media (max-width: 420px){
-      header h1{ font-size:.92rem; }
-      header .env #btnBack{ max-width:200px; }
     }
 
     main{
@@ -230,20 +190,13 @@ body{
       font-size:.85rem;
     }
 
-    
-    .calendarWrap{
-      width:100%;
-      overflow-x:auto;
-      -webkit-overflow-scrolling:touch;
-    }
-.calendarGrid{
+    .calendarGrid{
       display:grid;
       grid-template-columns: repeat(7, 1fr);
       border:1px solid var(--line);
       border-radius:12px;
       overflow:hidden;
       background:#fff;
-      width:100%;
     }
     .dow{
       padding:.55rem .6rem;
@@ -257,7 +210,6 @@ body{
     }
     .dayCell{
       min-height:105px;
-      min-width:0;
       border-right:1px solid var(--line);
       border-bottom:1px solid var(--line);
       padding:.55rem .6rem .6rem;
@@ -301,14 +253,6 @@ body{
       font-size:.78rem;
       background:#fff;
       cursor:pointer;
-      max-width:100%;
-      overflow:hidden;
-    }
-    .eventChip .meta .name,
-    .eventChip .meta .sub{
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
     }
     .eventChip .meta{
       display:flex; flex-direction:column; gap:.15rem;
@@ -343,9 +287,6 @@ body{
 
     label{font-size:.85rem; font-weight:700}
     input, select, textarea{
-      font-size:16px;
-      -webkit-text-size-adjust:100%;
-      text-size-adjust:100%;
       width:100%;
       padding:.55rem .6rem;
       border-radius:10px;
@@ -434,12 +375,6 @@ body{
       margin:0;
     }
 
-
-    .scrollBox{
-      max-height: 440px;
-      overflow:auto;
-      -webkit-overflow-scrolling:touch;
-    }
     .table{
       width:100%;
       border-collapse:separate;
@@ -473,30 +408,16 @@ body{
 
     .muted{color:var(--muted)}
     .rightAlign{text-align:right}
-  
-    @media (max-width: 760px){
-      /* Let the calendar breathe: horizontal swipe rather than microscopic columns */
-      .calendarGrid{ min-width: 720px; }
-      /* Make nested list scrolling reliable on iOS */
-      .scrollBox{ max-height: 55vh; }
-    }
-
-    @media (max-width: 560px){
-      input, select, textarea{ font-size:16px; }
-      label{ font-size:.9rem; }
-    }
-</style>
+  </style>
 </head>
 
 <body>
   <header>
-    <div class="headerInner">
-      <h1>📓 Little Black Book <span class="pill"><span class="dot info"></span><span id="modeLabel">Supabase</span></span></h1>
+    <h1>📓 Little Black Book <span class="pill"><span class="dot info"></span><span id="modeLabel">Supabase</span></span></h1>
     <div class="env">
       <button class="ghost" id="btnBack">← Back to Roster</button>
       <span class="pill"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></span>
       <span class="pill"><span class="dot info"></span><span id="whoAmI">Not signed in</span></span>
-    </div>
     </div>
   </header>
 
@@ -547,7 +468,7 @@ body{
               </div>
             </div>
 
-            <div class="calendarWrap"><div class="calendarGrid" id="calendarGrid"></div></div>
+            <div class="calendarGrid" id="calendarGrid"></div>
           </div>
 
           <div class="card">
@@ -601,7 +522,7 @@ body{
 
             <div class="divider"></div>
 
-            <div class="scrollBox">
+            <div style="max-height: 440px; overflow:auto;">
               <table class="table" id="listTable">
                 <thead>
                   <tr>
@@ -878,19 +799,6 @@ const els = {
   btnSaveEntry: document.getElementById("btnSaveEntry"),
   btnDeleteEntry: document.getElementById("btnDeleteEntry"),
 };
-
-// ---- Mobile layout guardrail ----
-// iOS Safari can "widen" the page when content expands, which makes the header look truncated.
-// We run the header as fixed and set body padding-top to the measured header height.
-function syncHeaderHeight(){
-  const h = document.querySelector("header");
-  if(!h) return;
-  document.documentElement.style.setProperty("--hdrH", `${h.offsetHeight}px`);
-}
-window.addEventListener("resize", syncHeaderHeight, { passive: true });
-window.addEventListener("orientationchange", syncHeaderHeight, { passive: true });
-// initial run
-syncHeaderHeight();
 
 
 function setError(msg){
