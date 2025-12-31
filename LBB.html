@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Derby Control – Little Black Book</title>
+
+  <style>
+    :root{
+      --bg:#f3f4f6;
+      --card:#ffffff;
+      --ink:#111827;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --header:#111827;
+      --headerInk:#f9fafb;
+      --btn:#111827;
+      --btnInk:#f9fafb;
+
+      --ok:#16a34a;
+      --warn:#f59e0b;
+      --bad:#dc2626;
+      --info:#2563eb;
+    }
+
+    *{box-sizing:border-box}
+    body{
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:var(--bg);
+      margin:0;
+      color:var(--ink);
+    }
+
+    header{
+      background:var(--header);
+      color:var(--headerInk);
+      padding:1rem 1.25rem;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:1rem;
+      position:sticky;
+      top:0;
+      z-index:10;
+    }
+    header h1{
+      font-size:1.05rem;
+      margin:0;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:.6rem;
+      white-space:nowrap;
+    }
+    header .env{
+      font-size:.8rem;
+      opacity:.85;
+      white-space:nowrap;
+    }
+
+    main{
+      padding:1.25rem;
+      max-width:1280px;
+      margin:0 auto;
+    }
+
+    .row{
+      display:flex;
+      gap:1rem;
+      flex-wrap:wrap;
+      align-items:stretch;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:1rem;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+
+    .toolbar{
+      display:flex;
+      gap:.5rem;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .left, .right{
+      display:flex;
+      gap:.5rem;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+
+    button, .btn{
+      background:var(--btn);
+      color:var(--btnInk);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:10px;
+      padding:.55rem .75rem;
+      cursor:pointer;
+      font-weight:600;
+      font-size:.9rem;
+    }
+    button.secondary{
+      background:#fff;
+      color:var(--ink);
+      border:1px solid var(--line);
+    }
+    button.ghost{
+      background:transparent;
+      color:var(--headerInk);
+      border:1px solid rgba(255,255,255,.18);
+    }
+    button:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:.4rem;
+      padding:.18rem .55rem;
+      border-radius:999px;
+      font-size:.78rem;
+      border:1px solid var(--line);
+      background:#fff;
+      color:var(--ink);
+      white-space:nowrap;
+    }
+    .pill .dot{
+      width:10px;height:10px;border-radius:999px;
+      background:var(--muted);
+    }
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--warn)}
+    .dot.bad{background:var(--bad)}
+    .dot.info{background:var(--info)}
+
+    .gridWrap{
+      display:grid;
+      grid-template-columns: 1fr 380px;
+      gap:1rem;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .gridWrap{grid-template-columns: 1fr}
+    }
+
+    .monthHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.75rem;
+      margin-bottom:.75rem;
+    }
+    .monthTitle{
+      font-size:1.05rem;
+      font-weight:800;
+    }
+    .subtle{
+      color:var(--muted);
+      font-size:.85rem;
+    }
+
+    .calendarGrid{
+      display:grid;
+      grid-template-columns: repeat(7, 1fr);
+      border:1px solid var(--line);
+      border-radius:12px;
+      overflow:hidden;
+      background:#fff;
+    }
+    .dow{
+      padding:.55rem .6rem;
+      background:#f9fafb;
+      border-bottom:1px solid var(--line);
+      font-size:.78rem;
+      font-weight:800;
+      color:#374151;
+      text-transform:uppercase;
+      letter-spacing:.6px;
+    }
+    .dayCell{
+      min-height:105px;
+      border-right:1px solid var(--line);
+      border-bottom:1px solid var(--line);
+      padding:.55rem .6rem .6rem;
+      display:flex;
+      flex-direction:column;
+      gap:.35rem;
+      position:relative;
+    }
+    .dayCell:nth-child(7n){border-right:none}
+    .dayNum{
+      font-weight:800;
+      font-size:.88rem;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.4rem;
+    }
+    .dayNum .tiny{
+      font-weight:700;
+      font-size:.72rem;
+      color:var(--muted);
+    }
+    .isToday{
+      outline:2px solid rgba(37,99,235,.25);
+      outline-offset:-2px;
+      background:rgba(37,99,235,.03);
+    }
+    .isOutside{
+      background:#fcfcfd;
+      color:#9ca3af;
+    }
+
+    .eventChip{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.45rem;
+      padding:.32rem .45rem;
+      border-radius:10px;
+      border:1px solid var(--line);
+      font-size:.78rem;
+      background:#fff;
+      cursor:pointer;
+    }
+    .eventChip .meta{
+      display:flex; flex-direction:column; gap:.15rem;
+      min-width:0;
+    }
+    .eventChip .meta b{
+      font-size:.78rem;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 240px;
+    }
+    .eventChip .meta span{
+      color:var(--muted);
+      font-size:.72rem;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width: 240px;
+    }
+    .tag{
+      font-size:.72rem;
+      padding:.12rem .4rem;
+      border-radius:999px;
+      border:1px solid var(--line);
+      white-space:nowrap;
+    }
+    .tag.ok{border-color:rgba(22,163,74,.35); background:rgba(22,163,74,.07); color:#166534}
+    .tag.warn{border-color:rgba(245,158,11,.35); background:rgba(245,158,11,.08); color:#92400e}
+    .tag.bad{border-color:rgba(220,38,38,.35); background:rgba(220,38,38,.07); color:#991b1b}
+    .tag.info{border-color:rgba(37,99,235,.35); background:rgba(37,99,235,.07); color:#1d4ed8}
+
+    label{font-size:.85rem; font-weight:700}
+    input, select, textarea{
+      width:100%;
+      padding:.55rem .6rem;
+      border-radius:10px;
+      border:1px solid var(--line);
+      font:inherit;
+      background:#fff;
+    }
+    textarea{min-height:80px; resize:vertical}
+
+    .formRow{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:.65rem;
+    }
+    .formRow3{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:.65rem;
+    }
+    @media (max-width: 980px){
+      .formRow, .formRow3{grid-template-columns: 1fr}
+    }
+
+    .divider{
+      height:1px;
+      background:var(--line);
+      margin:.9rem 0;
+    }
+
+    .hint{
+      font-size:.82rem;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    .kpi{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.5rem;
+      margin-top:.5rem;
+    }
+
+    .modalBack{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:1rem;
+      z-index:50;
+    }
+    .modal{
+      width:min(560px, 100%);
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:1rem;
+      box-shadow:0 10px 35px rgba(0,0,0,.2);
+    }
+    .modalHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.75rem;
+      margin-bottom:.5rem;
+    }
+    .modalHeader b{font-size:1rem}
+    .modalActions{
+      display:flex;
+      gap:.5rem;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+      margin-top:.75rem;
+    }
+
+    .checkbox{
+      display:flex;
+      align-items:center;
+      gap:.55rem;
+      font-size:.9rem;
+      color:var(--ink);
+      user-select:none;
+    }
+    .checkbox input{
+      width:18px; height:18px;
+      margin:0;
+    }
+
+    .table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      font-size:.86rem;
+      overflow:hidden;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:#fff;
+    }
+    .table th, .table td{
+      padding:.55rem .6rem;
+      border-bottom:1px solid var(--line);
+      text-align:left;
+      vertical-align:top;
+    }
+    .table th{
+      background:#f9fafb;
+      font-size:.78rem;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+      color:#374151;
+    }
+    .table tr:last-child td{border-bottom:none}
+
+    .tinyBtn{
+      padding:.28rem .5rem;
+      border-radius:10px;
+      font-size:.78rem;
+    }
+
+    .muted{color:var(--muted)}
+    .rightAlign{text-align:right}
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+  <header>
+    <h1>📓 Little Black Book <span class="pill"><span class="dot info"></span><span id="modeLabel">Supabase</span></span></h1>
+    <div class="env">
+      <button class="ghost" id="btnBack">← Back to Roster</button>
+      <span class="pill"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></span>
+      <span class="pill"><span class="dot info"></span><span id="whoAmI">Not signed in</span></span>
+    </div>
+  </header>
+
+  <main>
+    <div class="row">
+      <div class="card" style="flex:1 1 680px;">
+        <div class="toolbar">
+          <div class="left">
+            <button class="secondary" id="btnPrev">◀</button>
+            <button class="secondary" id="btnToday">Today</button>
+            <button class="secondary" id="btnNext">▶</button>
+            <span class="pill"><span class="dot info"></span><span id="windowLabel">12‑month window</span></span>
+          </div>
+          <div class="right">
+            <button id="btnLogin" class="secondary">Sign in</button>
+            <button id="btnLogout" class="secondary" style="display:none;">Sign out</button>
+            <button id="btnNew" disabled>+ New entry</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="gridWrap">
+          <div>
+            <div class="monthHeader">
+              <div>
+                <div class="monthTitle" id="monthTitle">Month</div>
+                <div class="subtle" id="monthSub">Visibility: everyone (edit: your own only)</div>
+              </div>
+              <div class="kpi">
+                <span class="pill"><span class="dot ok"></span><span id="kpiApproved">Approved: 0</span></span>
+                <span class="pill"><span class="dot warn"></span><span id="kpiPending">Pending: 0</span></span>
+                <span class="pill"><span class="dot bad"></span><span id="kpiRejected">Rejected: 0</span></span>
+              </div>
+            </div>
+
+            <div class="calendarGrid" id="calendarGrid"></div>
+          </div>
+
+          <div class="card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:.75rem;">
+              <b>Entries (list view)</b>
+              <span class="pill"><span class="dot info"></span><span id="listCount">0 shown</span></span>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="formRow">
+              <div>
+                <label>Filter: Link</label>
+                <select id="fltLink">
+                  <option value="">All links</option>
+                </select>
+              </div>
+              <div>
+                <label>Filter: Type</label>
+                <select id="fltType">
+                  <option value="">All types</option>
+                  <option value="AL">A/L</option>
+                  <option value="CL">C/L</option>
+                  <option value="COURSE">Course</option>
+                  <option value="MEETING">Meeting</option>
+                  <option value="APPOINTMENT">Appointment</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="formRow" style="margin-top:.65rem;">
+              <div>
+                <label>Filter: Status</label>
+                <select id="fltStatus">
+                  <option value="">All statuses</option>
+                  <option value="AUTO_APPROVED">Auto‑approved</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+              <div>
+                <label>Filter: Person</label>
+                <select id="fltPerson">
+                  <option value="">All people</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div style="max-height: 440px; overflow:auto;">
+              <table class="table" id="listTable">
+                <thead>
+                  <tr>
+                    <th>Date(s)</th>
+                    <th>Person</th>
+                    <th>Link</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th class="rightAlign">Edit</th>
+                  </tr>
+                </thead>
+                <tbody id="listBody"></tbody>
+              </table>
+            </div>
+
+            <div class="divider"></div>
+            <div class="hint">
+              Auto‑approval rule (first pass): if the request is within the next <b>12 months</b> and you’re the
+              <b>first person in your link</b> requesting that date, it’s <b>auto‑approved</b>.
+              Second+ in the same link/day becomes <b>pending</b> for roster/RCM/SNDM/HoC approval.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      </div>
+    </div>
+  </main>
+
+  <div class="modalBack" id="loginBack">
+    <div class="modal">
+      <div class="modalHeader">
+        <b>Sign in (5‑char access code)</b>
+        <button class="secondary tinyBtn" id="btnCloseLogin">Close</button>
+      </div>
+
+      <div class="hint" style="margin-bottom:.75rem;">
+        No emails. No passwords. No “I forgot it” tickets.
+      </div>
+
+      <label>Access code</label>
+      <input id="accessCode" placeholder="ABCDE" maxlength="5" autocomplete="off" />
+
+      <div style="height:.65rem"></div>
+
+      <label class="checkbox">
+        <input type="checkbox" id="rememberMe" />
+        Remember me on this device
+      </label>
+
+      <div class="modalActions">
+        <button id="btnDoLogin">Sign in</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="hint">
+        Shared desk PC? Leave “Remember me” unticked so it signs you out when the tab closes.
+      </div>
+    </div>
+  </div>
+
+  <div class="modalBack" id="entryBack">
+    <div class="modal">
+      <div class="modalHeader">
+        <b id="entryTitle">New entry</b>
+        <button class="secondary tinyBtn" id="btnCloseEntry">Close</button>
+      </div>
+
+      <div class="formRow">
+        <div>
+          <label>Type</label>
+          <select id="eType">
+            <option value="AL">A/L</option>
+            <option value="CL">C/L</option>
+            <option value="COURSE">Course</option>
+            <option value="MEETING">Meeting</option>
+            <option value="APPOINTMENT">Appointment</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div>
+          <label>Link</label>
+          <input id="eLink" placeholder="Auto-filled from your profile" />
+        </div>
+      </div>
+
+      <div class="formRow" style="margin-top:.65rem;">
+        <div>
+          <label>Start date</label>
+          <input id="eStart" type="date" />
+        </div>
+        <div>
+          <label>End date</label>
+          <input id="eEnd" type="date" />
+        </div>
+      </div>
+
+      <div style="margin-top:.65rem;">
+        <label>Notes (optional)</label>
+        <textarea id="eNotes" placeholder="e.g. AM only, hospital appt, course name, etc"></textarea>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="hint" id="autoHint">Auto‑approval check will run on save.</div>
+
+      <div class="modalActions">
+        <button class="secondary" id="btnDeleteEntry" style="display:none;">Cancel</button>
+        <button id="btnSaveEntry">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ==========================================================
+   Derby Control – Little Black Book (Calendar bolt‑on)
+   - Supabase-backed (no local demo mode)
+   - Personal login via 5‑char access code (staff_directory.access_code)
+   - Optional admin approvals via existing roster Supabase Auth session
+   ========================================================== */
+
+const SUPABASE_URL = "https://
+ywvbxfitzsuyhvxcdnth.supabase.co";      // <-- paste your project URL
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM"; // <-- paste your anon key
+const BACK_TO_ROSTER_URL = ""; // <-- optional; leave blank to use browser back()
+
+const pad2 = n => String(n).padStart(2,"0");
+const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const parseISO = s => { const [y,m,d]=String(s).split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (d, n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const sameDay = (a,b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+
+function normaliseCode(s){ return (s||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,5); }
+function normaliseText(s){ return (s||"").trim().replace(/\s+/g," "); }
+
+function entryTypeLabel(t){
+  if(t==="AL") return "A/L";
+  if(t==="CL") return "C/L";
+  if(t==="COURSE") return "Course";
+  if(t==="MEETING") return "Meeting";
+  if(t==="APPOINTMENT") return "Appointment";
+  return "Other";
+}
+function statusTag(status){
+  if(status==="AUTO_APPROVED") return ["Auto", "ok"];
+  if(status==="APPROVED") return ["Approved","ok"];
+  if(status==="PENDING") return ["Pending","warn"];
+  if(status==="REJECTED") return ["Rejected","bad"];
+  if(status==="CANCELLED") return ["Cancelled","info"];
+  return ["Unknown","info"];
+}
+
+function inRolling12Months(dateStr){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = new Date(today); end.setMonth(end.getMonth()+12);
+  const d = parseISO(dateStr); d.setHours(0,0,0,0);
+  return d >= today && d < end;
+}
+function eachDayInclusive(startStr, endStr){
+  const s = parseISO(startStr), e = parseISO(endStr);
+  const out=[];
+  for(let d=new Date(s); d<=e; d=addDays(d,1)) out.push(isoDate(d));
+  return out;
+}
+function escapeHtml(s){
+  return String(s||"")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+const AUTH_KEY = "dc_lbb_auth_v1";
+const SESSION_AUTH_KEY = "dc_lbb_auth_session_v1";
+
+let supabase = null;
+
+const state = {
+  today: (()=>{ const t=new Date(); t.setHours(0,0,0,0); return t; })(),
+  viewMonth: (()=>{ const t=new Date(); t.setHours(0,0,0,0); t.setDate(1); return t; })(),
+  accessAuth: null,        // { staffId, name, link, code }
+  approverAuth: null,      // { userId, role } from profiles via Supabase Auth (optional)
+  people: [],              // {id,name,link,code,is_active}
+  entries: [],             // calendar_entries joined to staff_directory
+};
+
+const els = {
+  modeLabel: document.getElementById("modeLabel"),
+  connDot: document.getElementById("connDot"),
+  connText: document.getElementById("connText"),
+  whoAmI: document.getElementById("whoAmI"),
+  btnBack: document.getElementById("btnBack"),
+
+  btnPrev: document.getElementById("btnPrev"),
+  btnNext: document.getElementById("btnNext"),
+  btnToday: document.getElementById("btnToday"),
+  monthTitle: document.getElementById("monthTitle"),
+  windowLabel: document.getElementById("windowLabel"),
+
+  calendarGrid: document.getElementById("calendarGrid"),
+
+  btnLogin: document.getElementById("btnLogin"),
+  btnLogout: document.getElementById("btnLogout"),
+  btnNew: document.getElementById("btnNew"),
+
+  kpiApproved: document.getElementById("kpiApproved"),
+  kpiPending: document.getElementById("kpiPending"),
+  kpiRejected: document.getElementById("kpiRejected"),
+
+  fltLink: document.getElementById("fltLink"),
+  fltType: document.getElementById("fltType"),
+  fltStatus: document.getElementById("fltStatus"),
+  fltPerson: document.getElementById("fltPerson"),
+  listCount: document.getElementById("listCount"),
+  listBody: document.getElementById("listBody"),
+
+  loginBack: document.getElementById("loginBack"),
+  btnCloseLogin: document.getElementById("btnCloseLogin"),
+  accessCode: document.getElementById("accessCode"),
+  rememberMe: document.getElementById("rememberMe"),
+  btnDoLogin: document.getElementById("btnDoLogin"),
+
+  entryBack: document.getElementById("entryBack"),
+  btnCloseEntry: document.getElementById("btnCloseEntry"),
+  entryTitle: document.getElementById("entryTitle"),
+  eType: document.getElementById("eType"),
+  eLink: document.getElementById("eLink"),
+  eStart: document.getElementById("eStart"),
+  eEnd: document.getElementById("eEnd"),
+  eNotes: document.getElementById("eNotes"),
+  autoHint: document.getElementById("autoHint"),
+  btnSaveEntry: document.getElementById("btnSaveEntry"),
+  btnDeleteEntry: document.getElementById("btnDeleteEntry"),
+};
+
+function setConnected(connected, modeText){
+  els.connDot.className = "dot " + (connected ? "ok" : "");
+  els.connText.textContent = connected ? "Connected" : "Not connected";
+  els.modeLabel.textContent = modeText || (connected ? "Supabase" : "Offline");
+}
+
+// --- Access-code login persistence ---
+function loadAccessAuth(){
+  const saved = localStorage.getItem(AUTH_KEY);
+  const sess = sessionStorage.getItem(SESSION_AUTH_KEY);
+  let a=null;
+  try{ a = JSON.parse(sess || saved || "null"); }catch(e){ a=null; }
+  state.accessAuth = (a && a.code && a.staffId) ? a : null;
+}
+function saveAccessAuth(auth, remember){
+  state.accessAuth = auth;
+  if(remember){
+    localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    sessionStorage.removeItem(SESSION_AUTH_KEY);
+  }else{
+    sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(auth));
+    localStorage.removeItem(AUTH_KEY);
+  }
+}
+function clearAccessAuth(){
+  state.accessAuth=null;
+  localStorage.removeItem(AUTH_KEY);
+  sessionStorage.removeItem(SESSION_AUTH_KEY);
+}
+
+function renderAuth(){
+  const parts = [];
+  if(state.accessAuth) parts.push(`${state.accessAuth.name} (${state.accessAuth.link || "no link"})`);
+  if(state.approverAuth?.role) parts.push(`Approver: ${state.approverAuth.role}`);
+  els.whoAmI.textContent = parts.length ? parts.join(" • ") : "Not signed in";
+
+  els.btnLogin.style.display = state.accessAuth ? "none" : "";
+  els.btnLogout.style.display = state.accessAuth ? "" : "none";
+  els.btnNew.disabled = !state.accessAuth;
+}
+
+// --- Supabase ---
+function initSupabase(){
+  if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
+    setConnected(false, "Missing Supabase keys");
+    alert("Paste SUPABASE_URL and SUPABASE_ANON_KEY into the HTML <script> block.");
+    return false;
+  }
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  setConnected(true, "Supabase");
+  return true;
+}
+
+async function fetchApproverRole(){
+  // Optional: re-use roster app’s Supabase Auth session if present in this browser.
+  // If your roster already signs in admins/editors, this page can detect it and unlock approvals.
+  try{
+    const { data: sess } = await supabase.auth.getSession();
+    const user = sess?.session?.user;
+    if(!user){ state.approverAuth = null; return; }
+
+    // Assumption: your profiles table has a "role" column like 'admin'/'editor'/etc.
+    // If yours differs, change "role" to whatever you actually use.
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if(error){ state.approverAuth = null; return; }
+
+    const role = (data?.role || "").toLowerCase();
+    if(role==="admin" || role==="editor"){
+      state.approverAuth = { userId: user.id, role };
+    }else{
+      state.approverAuth = null;
+    }
+  }catch(_){
+    state.approverAuth = null;
+  }
+}
+
+async function fetchPeople(){
+  const { data, error } = await supabase
+    .from("staff_directory")
+    .select("id, canonical_name, default_link, access_code, is_active")
+    .order("canonical_name", { ascending:true });
+  if(error) throw error;
+
+  return (data||[])
+    .filter(x=>x.is_active)
+    .map(x=>({
+      id: x.id,
+      name: x.canonical_name,
+      link: x.default_link || "",
+      code: (x.access_code || "").toUpperCase()
+    }));
+}
+
+async function fetchEntries(){
+  const y=state.viewMonth.getFullYear(), m=state.viewMonth.getMonth();
+  const monthStart = isoDate(new Date(y,m,1));
+  const monthEnd = isoDate(new Date(y,m+1,0));
+
+  const { data, error } = await supabase
+    .from("calendar_entries")
+    .select(`
+      id,
+      staff_id,
+      start_date,
+      end_date,
+      entry_type,
+      notes,
+      link,
+      status,
+      decided_by,
+      decided_at,
+      created_at,
+      updated_at,
+      staff_directory ( canonical_name, default_link )
+    `)
+    .gte("end_date", monthStart)
+    .lte("start_date", monthEnd)
+    .order("start_date", { ascending:true });
+
+  if(error) throw error;
+
+  return (data||[]).map(x=>({
+    id: x.id,
+    staffId: x.staff_id,
+    personName: x.staff_directory?.canonical_name || "Unknown",
+    link: x.link || x.staff_directory?.default_link || "",
+    type: x.entry_type,
+    start: x.start_date,
+    end: x.end_date,
+    notes: x.notes || "",
+    status: x.status,
+    decidedBy: x.decided_by || "",
+    decidedAt: x.decided_at || "",
+    createdAt: x.created_at || "",
+    updatedAt: x.updated_at || ""
+  }));
+}
+
+async function lookupPersonByCode(code){
+  const { data, error } = await supabase
+    .from("staff_directory")
+    .select("id, canonical_name, default_link, access_code, is_active")
+    .eq("access_code", code)
+    .maybeSingle();
+  if(error) throw error;
+  if(!data || !data.is_active) return null;
+  return { id:data.id, name:data.canonical_name, link:data.default_link||"", code:(data.access_code||"").toUpperCase() };
+}
+
+// --- Auto-approval likelihood (client-side preview)
+function computeStatusForNewEntry(person, entry){
+  const days = eachDayInclusive(entry.start, entry.end);
+  const inWindow = days.every(d=>inRolling12Months(d));
+  if(!inWindow) return "PENDING";
+
+  for(const d of days){
+    const already = state.entries.some(e=>{
+      if((e.link||"") !== (person.link||"")) return false;
+      if(e.status==="REJECTED" || e.status==="CANCELLED") return false;
+      const edays = eachDayInclusive(e.start, e.end);
+      return edays.includes(d);
+    });
+    if(already) return "PENDING";
+  }
+  return "AUTO_APPROVED";
+}
+function autoLikelihood(person, start, end){
+  const days = eachDayInclusive(start, end);
+  const inWindow = days.every(d=>inRolling12Months(d));
+  if(!inWindow) return {label:"Outside 12 months → Approval required", cls:"warn"};
+
+  for(const d of days){
+    const already = state.entries.some(e=>{
+      if((e.link||"") !== (person.link||"")) return false;
+      if(e.status==="REJECTED" || e.status==="CANCELLED") return false;
+      const edays = eachDayInclusive(e.start, e.end);
+      return edays.includes(d);
+    });
+    if(already) return {label:"Someone already has this day in your link → Approval required", cls:"warn"};
+  }
+  return {label:"Looks like you’re first in your link → Auto‑approved", cls:"ok"};
+}
+
+// --- Rendering ---
+function buildDOW(){
+  const dows=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  els.calendarGrid.innerHTML="";
+  dows.forEach(d=>{ const div=document.createElement("div"); div.className="dow"; div.textContent=d; els.calendarGrid.appendChild(div); });
+}
+
+function renderMonth(){
+  const d = new Date(state.viewMonth); d.setDate(1);
+  const y=d.getFullYear(), m=d.getMonth();
+  els.monthTitle.textContent = d.toLocaleString("en-GB",{month:"long", year:"numeric"});
+
+  const start = new Date(state.today);
+  const end = new Date(state.today); end.setMonth(end.getMonth()+12);
+  els.windowLabel.textContent = `Window: ${start.toLocaleDateString("en-GB")} → ${end.toLocaleDateString("en-GB")}`;
+
+  const monthEntries = state.entries;
+  els.kpiApproved.textContent = `Approved: ${monthEntries.filter(e=>e.status==="APPROVED"||e.status==="AUTO_APPROVED").length}`;
+  els.kpiPending.textContent = `Pending: ${monthEntries.filter(e=>e.status==="PENDING").length}`;
+  els.kpiRejected.textContent = `Rejected: ${monthEntries.filter(e=>e.status==="REJECTED").length}`;
+
+  buildDOW();
+
+  const first = new Date(y,m,1);
+  const firstDow = (first.getDay()+6)%7;
+  const gridStart = addDays(first, -firstDow);
+
+  for(let i=0;i<42;i++){
+    const dateObj = addDays(gridStart, i);
+    const isOutside = dateObj.getMonth()!==m;
+    const cell=document.createElement("div");
+    cell.className = "dayCell" + (isOutside ? " isOutside":"") + (sameDay(dateObj,state.today) ? " isToday":"");
+    const dayStr = isoDate(dateObj);
+
+    const num=document.createElement("div");
+    num.className="dayNum";
+    num.innerHTML = `<span>${dateObj.getDate()}</span><span class="tiny">${dateObj.toLocaleString("en-GB",{weekday:"short"})}</span>`;
+    cell.appendChild(num);
+
+    const events = state.entries
+      .filter(e=> (e.start <= dayStr && e.end >= dayStr) && e.status!=="CANCELLED")
+      .sort((a,b)=> (a.link||"").localeCompare(b.link||"") || (a.personName||"").localeCompare(b.personName||""));
+
+    const maxShow=4;
+    events.slice(0,maxShow).forEach(e=>{
+      const chip=document.createElement("div");
+      chip.className="eventChip";
+      const [label, cls] = statusTag(e.status);
+      chip.innerHTML = `<div class="meta">
+                          <b>${escapeHtml(e.personName)}</b>
+                          <span>${escapeHtml(e.link)} • ${escapeHtml(entryTypeLabel(e.type))}</span>
+                        </div>
+                        <span class="tag ${cls}">${label}</span>`;
+      chip.title = e.notes || "";
+      chip.addEventListener("click", ()=> openEntryModal(e.id));
+      cell.appendChild(chip);
+    });
+
+    if(events.length>maxShow){
+      const more=document.createElement("div");
+      more.className="hint";
+      more.textContent = `+${events.length-maxShow} more…`;
+      cell.appendChild(more);
+    }
+
+    cell.addEventListener("dblclick", ()=>{ if(state.accessAuth) openNewEntry(dayStr); });
+    els.calendarGrid.appendChild(cell);
+  }
+}
+
+function populateFilters(){
+  const links = Array.from(new Set([...state.people.map(p=>p.link).filter(Boolean), ...state.entries.map(e=>e.link).filter(Boolean)])).sort();
+  const keep = els.fltLink.value;
+  els.fltLink.innerHTML = `<option value="">All links</option>` + links.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
+  els.fltLink.value = links.includes(keep) ? keep : "";
+
+  const people = state.people.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const keepP = els.fltPerson.value;
+  els.fltPerson.innerHTML = `<option value="">All people</option>` + people.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
+  els.fltPerson.value = people.some(p=>p.id===keepP) ? keepP : "";
+}
+
+function renderList(){
+  const link = els.fltLink.value;
+  const type = els.fltType.value;
+  const status = els.fltStatus.value;
+  const personId = els.fltPerson.value;
+
+  const rows = state.entries.filter(e=>{
+    if(e.status==="CANCELLED") return false;
+    if(link && e.link !== link) return false;
+    if(type && e.type !== type) return false;
+    if(status && e.status !== status) return false;
+    if(personId && e.staffId !== personId) return false;
+    return true;
+  }).sort((a,b)=>a.start.localeCompare(b.start)|| (a.link||"").localeCompare(b.link||"") || (a.personName||"").localeCompare(b.personName||""));
+
+  els.listCount.textContent = `${rows.length} shown`;
+  els.listBody.innerHTML="";
+
+  const isApprover = !!state.approverAuth;
+
+  rows.forEach(e=>{
+    const [label, cls] = statusTag(e.status);
+    const canEdit = state.accessAuth && e.staffId === state.accessAuth.staffId;
+    const canDecide = isApprover && e.status==="PENDING";
+
+    const tr=document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(e.start)}${e.end!==e.start ? " → "+escapeHtml(e.end) : ""}</td>
+                    <td>${escapeHtml(e.personName)}</td>
+                    <td>${escapeHtml(e.link)}</td>
+                    <td>${escapeHtml(entryTypeLabel(e.type))}</td>
+                    <td><span class="tag ${cls}">${label}</span></td>
+                    <td class="rightAlign">
+                      ${canEdit ? `<button class="secondary tinyBtn" data-edit="${e.id}">Edit</button>` : `<span class="muted">—</span>`}
+                      ${canDecide ? ` <button class="secondary tinyBtn" data-appr="${e.id}">Approve</button>
+                                    <button class="secondary tinyBtn" data-rej="${e.id}">Reject</button>` : ``}
+                    </td>`;
+    els.listBody.appendChild(tr);
+  });
+
+  els.listBody.querySelectorAll("button[data-edit]").forEach(btn=>{
+    btn.addEventListener("click", ()=> openEntryModal(btn.getAttribute("data-edit")));
+  });
+  els.listBody.querySelectorAll("button[data-appr]").forEach(btn=>{
+    btn.addEventListener("click", ()=> decideEntry(btn.getAttribute("data-appr"), "APPROVED"));
+  });
+  els.listBody.querySelectorAll("button[data-rej]").forEach(btn=>{
+    btn.addEventListener("click", ()=> decideEntry(btn.getAttribute("data-rej"), "REJECTED"));
+  });
+}
+
+// --- Modals ---
+function openLogin(){
+  els.accessCode.value="";
+  els.rememberMe.checked=false;
+  els.loginBack.style.display="flex";
+  setTimeout(()=>els.accessCode.focus(), 50);
+}
+function closeLogin(){ els.loginBack.style.display="none"; }
+
+let selectedEntryId = null;
+
+function openEntryModal(entryId){
+  const e = state.entries.find(x=>x.id===entryId);
+  if(!e) return;
+  selectedEntryId = entryId;
+
+  const canEdit = state.accessAuth && e.staffId === state.accessAuth.staffId;
+
+  els.entryTitle.textContent = canEdit ? "Edit your entry" : "View entry";
+  els.eType.value = e.type;
+  els.eLink.value = e.link;
+  els.eStart.value = e.start;
+  els.eEnd.value = e.end;
+  els.eNotes.value = e.notes || "";
+
+  [els.eType, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=!canEdit);
+  els.btnSaveEntry.style.display = canEdit ? "" : "none";
+  els.btnDeleteEntry.style.display = canEdit ? "" : "none";
+
+  if(state.accessAuth){
+    const like = autoLikelihood(state.accessAuth, e.start, e.end);
+    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+  }else{
+    els.autoHint.textContent = "Sign in to create or edit your own entries.";
+  }
+
+  els.entryBack.style.display="flex";
+}
+
+function openNewEntry(seedDateStr){
+  if(!state.accessAuth){ openLogin(); return; }
+  selectedEntryId=null;
+  els.entryTitle.textContent = "New entry";
+  els.eType.value="AL";
+  els.eLink.value = state.accessAuth.link || "";
+  const seed = seedDateStr || isoDate(state.today);
+  els.eStart.value=seed; els.eEnd.value=seed; els.eNotes.value="";
+  [els.eType, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=false);
+  els.btnSaveEntry.style.display="";
+  els.btnDeleteEntry.style.display="none";
+  const like = autoLikelihood(state.accessAuth, seed, seed);
+  els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+  els.entryBack.style.display="flex";
+}
+function closeEntry(){ els.entryBack.style.display="none"; }
+
+// --- Writes (basic direct writes for v1; harden later via RPC + RLS)
+async function writeAudit(entryId, action, detail){
+  try{
+    const actor = state.approverAuth ? `APPROVER:${state.approverAuth.userId}` : `STAFF:${state.accessAuth?.staffId || "unknown"}`;
+    await supabase.from("calendar_audit").insert({
+      entry_id: entryId,
+      action,
+      actor,
+      detail: detail || null
+    });
+  }catch(_){
+    // Audit failure should not block ops. Humans love that.
+  }
+}
+
+async function saveEntry(){
+  if(!state.accessAuth) return;
+
+  const type = els.eType.value;
+  const link = normaliseText(els.eLink.value) || state.accessAuth.link || "";
+  const start = els.eStart.value;
+  const end = els.eEnd.value;
+  const notes = els.eNotes.value.trim();
+
+  if(!start || !end){ alert("Pick start and end dates."); return; }
+  if(end < start){ alert("End date cannot be before start date."); return; }
+  if(!link){ alert("Missing link (e.g. TRC/RCM/IC1)."); return; }
+
+  let status = "PENDING";
+  if(!selectedEntryId){
+    status = computeStatusForNewEntry(state.accessAuth, {start, end, link, type});
+  }else{
+    const old = state.entries.find(x=>x.id===selectedEntryId);
+    status = old ? old.status : "PENDING";
+  }
+
+  if(selectedEntryId){
+    const { error } = await supabase
+      .from("calendar_entries")
+      .update({
+        entry_type: type,
+        link,
+        start_date: start,
+        end_date: end,
+        notes,
+        updated_by: "STAFF",
+      })
+      .eq("id", selectedEntryId)
+      .eq("staff_id", state.accessAuth.staffId);
+
+    if(error){ console.error(error); alert("Save failed."); return; }
+    await writeAudit(selectedEntryId, "UPDATE", { type, link, start, end });
+  }else{
+    const { data, error } = await supabase
+      .from("calendar_entries")
+      .insert({
+        staff_id: state.accessAuth.staffId,
+        start_date: start,
+        end_date: end,
+        entry_type: type,
+        notes,
+        link,
+        status,
+        created_by: "STAFF",
+        updated_by: "STAFF"
+      })
+      .select("id")
+      .single();
+
+    if(error){ console.error(error); alert("Create failed."); return; }
+    await writeAudit(data.id, "CREATE", { type, link, start, end, status });
+  }
+
+  closeEntry();
+  await refreshAll();
+}
+
+async function cancelEntry(){
+  if(!state.accessAuth || !selectedEntryId) return;
+  if(!confirm("Cancel this entry?")) return;
+
+  const { error } = await supabase
+    .from("calendar_entries")
+    .update({ status:"CANCELLED", updated_by:"STAFF" })
+    .eq("id", selectedEntryId)
+    .eq("staff_id", state.accessAuth.staffId);
+
+  if(error){ console.error(error); alert("Cancel failed."); return; }
+  await writeAudit(selectedEntryId, "CANCEL", {});
+  closeEntry();
+  await refreshAll();
+}
+
+async function decideEntry(entryId, newStatus){
+  if(!state.approverAuth) return alert("Approver rights not detected.");
+  if(!confirm(`${newStatus==="APPROVED" ? "Approve" : "Reject"} this request?`)) return;
+
+  const { error } = await supabase
+    .from("calendar_entries")
+    .update({
+      status: newStatus,
+      decided_by: "APPROVER",
+      decided_at: new Date().toISOString(),
+      updated_by: "APPROVER"
+    })
+    .eq("id", entryId);
+
+  if(error){ console.error(error); alert("Decision failed."); return; }
+  await writeAudit(entryId, newStatus==="APPROVED" ? "APPROVE" : "REJECT", {});
+  await refreshAll();
+}
+
+// --- Login ---
+async function doLogin(){
+  const code = normaliseCode(els.accessCode.value);
+  const remember = !!els.rememberMe.checked;
+  if(code.length!==5){ alert("Enter a 5‑character code."); return; }
+
+  try{
+    const person = await lookupPersonByCode(code);
+    if(!person){ alert("Code not recognised."); return; }
+    saveAccessAuth({ staffId: person.id, name: person.name, link: person.link, code }, remember);
+    closeLogin();
+    renderAuth();
+    await refreshAll();
+  }catch(e){
+    console.error(e);
+    alert("Login failed.");
+  }
+}
+
+async function refreshAll(){
+  loadAccessAuth();
+  await fetchApproverRole();
+  renderAuth();
+
+  state.people = await fetchPeople();
+  state.entries = await fetchEntries();
+
+  // If access-code user was deactivated or code changed, clear it.
+  if(state.accessAuth){
+    const still = state.people.find(p=>p.id===state.accessAuth.staffId && p.code===state.accessAuth.code);
+    if(!still){
+      clearAccessAuth();
+      renderAuth();
+    }else{
+      state.accessAuth.name = still.name;
+      state.accessAuth.link = still.link;
+      const remember = !!localStorage.getItem(AUTH_KEY);
+      saveAccessAuth(state.accessAuth, remember);
+    }
+  }
+
+  populateFilters();
+  renderMonth();
+  renderList();
+}
+
+// --- Back button ---
+function gotoBack(){
+  if(BACK_TO_ROSTER_URL){
+    window.location.href = BACK_TO_ROSTER_URL;
+  }else{
+    history.back();
+  }
+}
+
+// --- Events ---
+els.btnBack.addEventListener("click", gotoBack);
+els.btnPrev.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewMonth.getMonth()-1); refreshAll(); });
+els.btnNext.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewMonth.getMonth()+1); refreshAll(); });
+els.btnToday.addEventListener("click", ()=>{ const t=new Date(); t.setDate(1); t.setHours(0,0,0,0); state.viewMonth=t; refreshAll(); });
+
+els.btnLogin.addEventListener("click", openLogin);
+els.btnLogout.addEventListener("click", ()=>{ clearAccessAuth(); renderAuth(); refreshAll(); });
+els.btnNew.addEventListener("click", ()=> openNewEntry());
+
+els.btnCloseLogin.addEventListener("click", closeLogin);
+els.loginBack.addEventListener("click", (e)=>{ if(e.target===els.loginBack) closeLogin(); });
+els.btnDoLogin.addEventListener("click", doLogin);
+els.accessCode.addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
+
+els.btnCloseEntry.addEventListener("click", closeEntry);
+els.entryBack.addEventListener("click", (e)=>{ if(e.target===els.entryBack) closeEntry(); });
+els.btnSaveEntry.addEventListener("click", saveEntry);
+els.btnDeleteEntry.addEventListener("click", cancelEntry);
+
+["change","input"].forEach(evt=>{
+  els.eStart.addEventListener(evt, ()=>{
+    if(!state.accessAuth) return;
+    const s = els.eStart.value || isoDate(state.today);
+    const e = els.eEnd.value || s;
+    const like = autoLikelihood(state.accessAuth, s, e);
+    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+  });
+  els.eEnd.addEventListener(evt, ()=>{
+    if(!state.accessAuth) return;
+    const s = els.eStart.value || isoDate(state.today);
+    const e = els.eEnd.value || s;
+    const like = autoLikelihood(state.accessAuth, s, e);
+    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+  });
+});
+
+[els.fltLink, els.fltType, els.fltStatus, els.fltPerson].forEach(x=>x.addEventListener("change", renderList));
+
+// Init
+(function init(){
+  els.modeLabel.textContent = "Supabase";
+  if(!initSupabase()) return;
+  refreshAll();
+})();
+</script>
+
+<!--
+SUPABASE TABLES (optional) – paste into Supabase SQL editor
+
+create table if not exists public.cal_people (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  link text not null,
+  code text not null check (length(code)=5),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists cal_people_code_uidx on public.cal_people (code);
+
+create table if not exists public.cal_entries (
+  id uuid primary key,
+  person_id uuid not null references public.cal_people(id) on delete cascade,
+  person_name text not null,
+  link text not null,
+  type text not null,
+  start date not null,
+  "end" date not null,
+  notes text null,
+  status text not null default 'pending',
+  code text not null check (length(code)=5),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists cal_entries_start_idx on public.cal_entries(start);
+create index if not exists cal_entries_link_idx on public.cal_entries(link);
+
+FIRST PASS SECURITY NOTE:
+This version is "good enough for a controllers diary" (your words, not mine).
+Edits require knowing the 5-char code, reads are open to anyone with the anon key.
+When you want to harden it, we move writes into a SECURITY DEFINER RPC and lock down direct writes with RLS.
+-->
+</body>
+</html>
