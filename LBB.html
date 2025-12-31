@@ -719,6 +719,12 @@ if(__cfgErr){
 const pad2 = n => String(n).padStart(2,"0");
 const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 
+function startOfDay(d){
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  return x;
+}
+
 // ===== System labels (non-editable) =====
 const SYSTEM_NEXT_PAYDAY = new Date("2026-01-02T00:00:00"); // Friday
 const SYSTEM_BASE_WEEK_SUN = new Date("2025-12-28T00:00:00"); // Sunday
