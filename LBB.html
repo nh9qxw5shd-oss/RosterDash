@@ -24,7 +24,9 @@
     }
 
     *{box-sizing:border-box}
-    html, body{
+    html, html{
+      }
+body{
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:var(--bg);
       margin:0;
@@ -228,7 +230,13 @@
       font-size:.85rem;
     }
 
-    .calendarGrid{
+    
+    .calendarWrap{
+      width:100%;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+.calendarGrid{
       display:grid;
       grid-template-columns: repeat(7, 1fr);
       border:1px solid var(--line);
@@ -335,6 +343,9 @@
 
     label{font-size:.85rem; font-weight:700}
     input, select, textarea{
+      font-size:16px;
+      -webkit-text-size-adjust:100%;
+      text-size-adjust:100%;
       width:100%;
       padding:.55rem .6rem;
       border-radius:10px;
@@ -423,6 +434,12 @@
       margin:0;
     }
 
+
+    .scrollBox{
+      max-height: 440px;
+      overflow:auto;
+      -webkit-overflow-scrolling:touch;
+    }
     .table{
       width:100%;
       border-collapse:separate;
@@ -456,7 +473,19 @@
 
     .muted{color:var(--muted)}
     .rightAlign{text-align:right}
-  </style>
+  
+    @media (max-width: 760px){
+      /* Let the calendar breathe: horizontal swipe rather than microscopic columns */
+      .calendarGrid{ min-width: 720px; }
+      /* Make nested list scrolling reliable on iOS */
+      .scrollBox{ max-height: 55vh; }
+    }
+
+    @media (max-width: 560px){
+      input, select, textarea{ font-size:16px; }
+      label{ font-size:.9rem; }
+    }
+</style>
 </head>
 
 <body>
@@ -518,7 +547,7 @@
               </div>
             </div>
 
-            <div class="calendarGrid" id="calendarGrid"></div>
+            <div class="calendarWrap"><div class="calendarGrid" id="calendarGrid"></div></div>
           </div>
 
           <div class="card">
@@ -572,7 +601,7 @@
 
             <div class="divider"></div>
 
-            <div style="max-height: 440px; overflow:auto;">
+            <div class="scrollBox">
               <table class="table" id="listTable">
                 <thead>
                   <tr>
