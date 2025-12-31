@@ -831,13 +831,38 @@ function renderAuth(){
 }
 
 // --- Supabase ---
-function initSupabase(){
+async function initSupabase(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
     setConnected(false, "Missing Supabase keys");
     setError("Missing Supabase URL / anon key. Paste SUPABASE_URL and SUPABASE_ANON_KEY at the top of the script.");
     return false;
   }
-  supabase = window.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Supabase client loader:
+  // - Prefer global UMD (window.supabase.createClient) if present
+  // - Fallback to dynamic ESM import (works on GitHub Pages + iOS Safari)
+  let createClientFn = (window.supabase && window.supabase.createClient) ? window.supabase.createClient
+                    : (typeof window.createClient === "function" ? window.createClient : null);
+
+  if(!createClientFn){
+    try{
+      const mod = await import("https://esm.sh/@supabase/supabase-js@2");
+      createClientFn = mod.createClient;
+    }catch(e){
+      setConnected(false, "Supabase library failed");
+      setError("Could not load Supabase client library. Check network filtering (CDNs) or try again. Details: " + (e && e.message ? e.message : e));
+      return false;
+    }
+  }
+
+  try{
+    supabase = createClientFn(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }catch(e){
+    setConnected(false, "Supabase init failed");
+    setError("Supabase createClient failed. Check URL/key formatting (single line, no ellipses). Details: " + (e && e.message ? e.message : e));
+    return false;
+  }
+
   setConnected(true, "Supabase");
   return true;
 }
@@ -1381,10 +1406,10 @@ els.btnDeleteEntry.addEventListener("click", cancelEntry);
 [els.fltLink, els.fltType, els.fltStatus, els.fltPerson].forEach(x=>x.addEventListener("change", renderList));
 
 // Init
-(function init(){
+(async function init(){
   els.modeLabel.textContent = "Supabase";
-  if(!initSupabase()) return;
-  refreshAll();
+  if(!(await initSupabase())) return;
+  await refreshAll();
 })();
 </script>
 
