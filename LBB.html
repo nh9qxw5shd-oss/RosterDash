@@ -408,6 +408,24 @@
 
     .muted{color:var(--muted)}
     .rightAlign{text-align:right}
+  
+    .systemChip{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.5rem;
+      background:#111827;
+      color:#f9fafb;
+      border-radius:12px;
+      padding:.22rem .55rem;
+      font-size:.74rem;
+      line-height:1.1;
+      margin:.25rem .35rem 0 .35rem;
+      user-select:none;
+      cursor:default;
+    }
+    .systemChip .muted{opacity:.85;font-weight:600}
+    
   </style>
 </head>
 
@@ -700,6 +718,35 @@ if(__cfgErr){
 
 const pad2 = n => String(n).padStart(2,"0");
 const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+// ===== System labels (non-editable) =====
+const SYSTEM_NEXT_PAYDAY = new Date("2026-01-02T00:00:00"); // Friday
+const SYSTEM_BASE_WEEK_SUN = new Date("2025-12-28T00:00:00"); // Sunday
+const SYSTEM_BASE_WEEK_NUM = 8;
+const SYSTEM_WEEK_CYCLE = 12;
+
+function isPayDay(dateObj){
+  if(dateObj.getDay() !== 5) return false; // Friday
+  const a = startOfDay(dateObj).getTime();
+  const b = startOfDay(SYSTEM_NEXT_PAYDAY).getTime();
+  const diffDays = Math.round((a - b) / 86400000);
+  const mod = ((diffDays % 28) + 28) % 28;
+  return mod === 0;
+}
+function weekNumberForSunday(dateObj){
+  const a = startOfDay(dateObj).getTime();
+  const b = startOfDay(SYSTEM_BASE_WEEK_SUN).getTime();
+  const diffWeeks = Math.floor((a - b) / (86400000 * 7));
+  const num = ((SYSTEM_BASE_WEEK_NUM - 1 + diffWeeks) % SYSTEM_WEEK_CYCLE + SYSTEM_WEEK_CYCLE) % SYSTEM_WEEK_CYCLE + 1;
+  return num;
+}
+function addSystemChip(cell, text){
+  const chip = document.createElement("div");
+  chip.className = "systemChip";
+  chip.innerHTML = `<span class="muted">System</span><span>${escapeHtml(text)}</span>`;
+  cell.appendChild(chip);
+}
+
 const parseISO = s => { const [y,m,d]=String(s).split("-").map(Number); return new Date(y, m-1, d); };
 const addDays = (d, n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const sameDay = (a,b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
@@ -1038,7 +1085,7 @@ function autoLikelihood(person, start, end){
 
 // --- Rendering ---
 function buildDOW(){
-  const dows=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   els.calendarGrid.innerHTML="";
   dows.forEach(d=>{ const div=document.createElement("div"); div.className="dow"; div.textContent=d; els.calendarGrid.appendChild(div); });
 }
@@ -1060,7 +1107,7 @@ function renderMonth(){
   buildDOW();
 
   const first = new Date(y,m,1);
-  const firstDow = (first.getDay()+6)%7;
+  const firstDow = first.getDay();
   const gridStart = addDays(first, -firstDow);
 
   for(let i=0;i<42;i++){
@@ -1074,6 +1121,12 @@ function renderMonth(){
     num.className="dayNum";
     num.innerHTML = `<span>${dateObj.getDate()}</span><span class="tiny">${dateObj.toLocaleString("en-GB",{weekday:"short"})}</span>`;
     cell.appendChild(num);
+
+    // System labels
+    if(isPayDay(dateObj)) addSystemChip(cell, "Pay Day");
+    if(dateObj.getDay()===0){ // Sunday
+      addSystemChip(cell, `Week ${weekNumberForSunday(dateObj)}`);
+    }
 
     const events = state.entries
       .filter(e=> (e.start <= dayStr && e.end >= dayStr) && e.status!=="CANCELLED")
