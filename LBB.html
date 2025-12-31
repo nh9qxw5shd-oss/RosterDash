@@ -34,11 +34,13 @@
     header{
       background:var(--header);
       color:var(--headerInk);
-      padding:1rem 1.25rem;
+      /* iOS safe area so the header doesn't look like it's been guillotined */
+      padding: calc(.85rem + env(safe-area-inset-top)) 1.25rem .85rem;
       display:flex;
       justify-content:space-between;
       align-items:center;
-      gap:1rem;
+      gap:.75rem;
+      flex-wrap:wrap; /* allow wrap on mobile instead of cutting off */
       position:sticky;
       top:0;
       z-index:10;
@@ -54,8 +56,30 @@
     }
     header .env{
       font-size:.8rem;
-      opacity:.85;
-      white-space:nowrap;
+      opacity:.9;
+      display:flex;
+      align-items:center;
+      justify-content:flex-end;
+      gap:.5rem;
+      flex-wrap:wrap;
+      /* no nowrap: on mobile it was forcing overflow and looking "cut off" */
+    }
+
+    /* Mobile header polish */
+    @media (max-width: 640px){
+      header{
+        padding: calc(.75rem + env(safe-area-inset-top)) 1rem .75rem;
+        align-items:stretch;
+      }
+      header h1{
+        white-space:normal;
+      }
+      header .env{
+        justify-content:flex-start;
+      }
+      header .env #btnBack{
+        width:100%;
+      }
     }
 
     main{
