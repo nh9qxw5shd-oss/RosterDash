@@ -528,6 +528,7 @@
                   <tr>
                     <th>Date(s)</th>
                     <th>Person</th>
+                    <th>Team</th>
                     <th>Link</th>
                     <th>Type</th>
                     <th>Status</th>
@@ -542,7 +543,7 @@
             <div class="hint">
               Auto‑approval rule (first pass): if the request is within the next <b>12 months</b> and you’re the
               <b>first person in your link</b> requesting that date, it’s <b>auto‑approved</b>.
-              Second+ in the same link/day becomes <b>pending</b> for roster/RCM/SNDM/HoC approval.
+              Second+ in the same link/day becomes <b>pending</b> for roster/RCM/SNDM/HoC approval. (Link = roster link group, not team.)
             </div>
           </div>
         </div>
@@ -591,7 +592,7 @@
         <button class="secondary tinyBtn" id="btnCloseEntry">Close</button>
       </div>
 
-      <div class="formRow">
+            <div class="formRow3">
         <div>
           <label>Type</label>
           <select id="eType">
@@ -602,6 +603,10 @@
             <option value="APPOINTMENT">Appointment</option>
             <option value="OTHER">Other</option>
           </select>
+        </div>
+        <div>
+          <label>Team</label>
+          <input id="eTeam" placeholder="Auto-filled from your profile" disabled />
         </div>
         <div>
           <label>Link</label>
@@ -745,9 +750,9 @@ let supabase = null;
 const state = {
   today: (()=>{ const t=new Date(); t.setHours(0,0,0,0); return t; })(),
   viewMonth: (()=>{ const t=new Date(); t.setHours(0,0,0,0); t.setDate(1); return t; })(),
-  accessAuth: null,        // { staffId, name, link, code }
+  accessAuth: null,        // { staffId, name, team, link, code }
   approverAuth: null,      // { userId, role } from profiles via Supabase Auth (optional)
-  people: [],              // {id,name,link,code,is_active}
+  people: [],              // {id,name,team,link,code,is_active}
   entries: [],             // calendar_entries joined to staff_directory
 };
 
@@ -791,6 +796,7 @@ const els = {
   btnCloseEntry: document.getElementById("btnCloseEntry"),
   entryTitle: document.getElementById("entryTitle"),
   eType: document.getElementById("eType"),
+  eTeam: document.getElementById("eTeam"),
   eLink: document.getElementById("eLink"),
   eStart: document.getElementById("eStart"),
   eEnd: document.getElementById("eEnd"),
@@ -845,7 +851,7 @@ function clearAccessAuth(){
 
 function renderAuth(){
   const parts = [];
-  if(state.accessAuth) parts.push(`${state.accessAuth.name} (${state.accessAuth.link || "no link"})`);
+  if(state.accessAuth) parts.push(`${state.accessAuth.name} (${state.accessAuth.team || "no team"} • ${state.accessAuth.link || "no link"})`);
   if(state.approverAuth?.role) parts.push(`Approver: ${state.approverAuth.role}`);
   els.whoAmI.textContent = parts.length ? parts.join(" • ") : "Not signed in";
 
@@ -923,7 +929,7 @@ async function fetchApproverRole(){
 async function fetchPeople(){
   const { data, error } = await supabase
     .from("staff_directory")
-    .select("id, canonical_name, default_link, access_code, is_active")
+    .select("id, canonical_name, default_team, default_link, access_code, is_active")
     .order("canonical_name", { ascending:true });
   if(error) throw error;
 
@@ -932,6 +938,7 @@ async function fetchPeople(){
     .map(x=>({
       id: x.id,
       name: x.canonical_name,
+      team: x.default_team || "",
       link: x.default_link || "",
       code: (x.access_code || "").toUpperCase()
     }));
@@ -951,13 +958,14 @@ async function fetchEntries(){
       end_date,
       entry_type,
       notes,
+      team,
       link,
       status,
       decided_by,
       decided_at,
       created_at,
       updated_at,
-      staff_directory ( canonical_name, default_link )
+      staff_directory ( canonical_name, default_team, default_link )
     `)
     .gte("end_date", monthStart)
     .lte("start_date", monthEnd)
@@ -969,6 +977,7 @@ async function fetchEntries(){
     id: x.id,
     staffId: x.staff_id,
     personName: x.staff_directory?.canonical_name || "Unknown",
+    team: x.team || x.staff_directory?.default_team || "",
     link: x.link || x.staff_directory?.default_link || "",
     type: x.entry_type,
     start: x.start_date,
@@ -985,12 +994,12 @@ async function fetchEntries(){
 async function lookupPersonByCode(code){
   const { data, error } = await supabase
     .from("staff_directory")
-    .select("id, canonical_name, default_link, access_code, is_active")
+    .select("id, canonical_name, default_team, default_link, access_code, is_active")
     .eq("access_code", code)
     .maybeSingle();
   if(error) throw error;
   if(!data || !data.is_active) return null;
-  return { id:data.id, name:data.canonical_name, link:data.default_link||"", code:(data.access_code||"").toUpperCase() };
+  return { id:data.id, name:data.canonical_name, team:data.default_team||"", link:data.default_link||"", code:(data.access_code||"").toUpperCase() };
 }
 
 // --- Auto-approval likelihood (client-side preview)
@@ -1077,7 +1086,7 @@ function renderMonth(){
       const [label, cls] = statusTag(e.status);
       chip.innerHTML = `<div class="meta">
                           <b>${escapeHtml(e.personName)}</b>
-                          <span>${escapeHtml(e.link)} • ${escapeHtml(entryTypeLabel(e.type))}</span>
+                          <span>${escapeHtml(e.team || "")}${e.team ? " • " : ""}${escapeHtml(e.link)} • ${escapeHtml(entryTypeLabel(e.type))}</span>
                         </div>
                         <span class="tag ${cls}">${label}</span>`;
       chip.title = e.notes || "";
@@ -1137,6 +1146,7 @@ function renderList(){
     const tr=document.createElement("tr");
     tr.innerHTML = `<td>${escapeHtml(e.start)}${e.end!==e.start ? " → "+escapeHtml(e.end) : ""}</td>
                     <td>${escapeHtml(e.personName)}</td>
+                    <td>${escapeHtml(e.team||"")}</td>
                     <td>${escapeHtml(e.link)}</td>
                     <td>${escapeHtml(entryTypeLabel(e.type))}</td>
                     <td><span class="tag ${cls}">${label}</span></td>
@@ -1179,12 +1189,14 @@ function openEntryModal(entryId){
 
   els.entryTitle.textContent = canEdit ? "Edit your entry" : "View entry";
   els.eType.value = e.type;
+  els.eTeam.value = e.team || "";
   els.eLink.value = e.link;
   els.eStart.value = e.start;
   els.eEnd.value = e.end;
   els.eNotes.value = e.notes || "";
 
-  [els.eType, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=!canEdit);
+  [els.eType, els.eTeam, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=!canEdit);
+  els.eTeam.disabled = true;
   els.btnSaveEntry.style.display = canEdit ? "" : "none";
   els.btnDeleteEntry.style.display = canEdit ? "" : "none";
 
@@ -1203,10 +1215,12 @@ function openNewEntry(seedDateStr){
   selectedEntryId=null;
   els.entryTitle.textContent = "New entry";
   els.eType.value="AL";
+  els.eTeam.value = state.accessAuth.team || "";
   els.eLink.value = state.accessAuth.link || "";
   const seed = seedDateStr || isoDate(state.today);
   els.eStart.value=seed; els.eEnd.value=seed; els.eNotes.value="";
-  [els.eType, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=false);
+  [els.eType, els.eTeam, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=false);
+  els.eTeam.disabled = true;
   els.btnSaveEntry.style.display="";
   els.btnDeleteEntry.style.display="none";
   const like = autoLikelihood(state.accessAuth, seed, seed);
@@ -1234,6 +1248,7 @@ async function saveEntry(){
   if(!state.accessAuth) return;
 
   const type = els.eType.value;
+  const team = normaliseText(els.eTeam.value) || state.accessAuth.team || "";
   const link = normaliseText(els.eLink.value) || state.accessAuth.link || "";
   const start = els.eStart.value;
   const end = els.eEnd.value;
@@ -1256,6 +1271,7 @@ async function saveEntry(){
       .from("calendar_entries")
       .update({
         entry_type: type,
+        team,
         link,
         start_date: start,
         end_date: end,
@@ -1266,7 +1282,7 @@ async function saveEntry(){
       .eq("staff_id", state.accessAuth.staffId);
 
     if(error){ console.error(error); alert("Save failed."); return; }
-    await writeAudit(selectedEntryId, "UPDATE", { type, link, start, end });
+    await writeAudit(selectedEntryId, "UPDATE", { type, team, link, start, end });
   }else{
     const { data, error } = await supabase
       .from("calendar_entries")
@@ -1276,6 +1292,7 @@ async function saveEntry(){
         end_date: end,
         entry_type: type,
         notes,
+        team,
         link,
         status,
         created_by: "STAFF",
@@ -1285,7 +1302,7 @@ async function saveEntry(){
       .single();
 
     if(error){ console.error(error); alert("Create failed."); return; }
-    await writeAudit(data.id, "CREATE", { type, link, start, end, status });
+    await writeAudit(data.id, "CREATE", { type, team, link, start, end, status });
   }
 
   closeEntry();
@@ -1336,7 +1353,7 @@ async function doLogin(){
   try{
     const person = await lookupPersonByCode(code);
     if(!person){ alert("Code not recognised."); return; }
-    saveAccessAuth({ staffId: person.id, name: person.name, link: person.link, code }, remember);
+    saveAccessAuth({ staffId: person.id, name: person.name, team: person.team || "", link: person.link, code }, remember);
     closeLogin();
     renderAuth();
     await refreshAll();
@@ -1364,6 +1381,7 @@ async function refreshAll(){
       renderAuth();
     }else{
       state.accessAuth.name = still.name;
+      state.accessAuth.team = still.team;
       state.accessAuth.link = still.link;
       const remember = !!localStorage.getItem(AUTH_KEY);
       saveAccessAuth(state.accessAuth, remember);
