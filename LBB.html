@@ -399,6 +399,15 @@
     </div>
   </header>
 
+  <div id="errBar" style="display:none; max-width:1280px; margin:0 auto; padding: .75rem 1.25rem;">
+    <div class="card" style="border-left:6px solid var(--bad);">
+      <b style="display:block; margin-bottom:.25rem;">Something failed to load</b>
+      <div class="hint" id="errText" style="color:#7f1d1d;"></div>
+      <div class="hint" style="margin-top:.35rem;">Tip: open your browser console (F12) for the full error.</div>
+    </div>
+  </div>
+
+
   <main>
     <div class="row">
       <div class="card" style="flex:1 1 680px;">
@@ -608,8 +617,7 @@
    - Optional admin approvals via existing roster Supabase Auth session
    ========================================================== */
 
-const SUPABASE_URL = "https://
-ywvbxfitzsuyhvxcdnth.supabase.co";      // <-- paste your project URL
+const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";      // <-- paste your project URL
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM"; // <-- paste your anon key
 const BACK_TO_ROSTER_URL = ""; // <-- optional; leave blank to use browser back()
 
@@ -720,6 +728,19 @@ const els = {
   btnDeleteEntry: document.getElementById("btnDeleteEntry"),
 };
 
+
+function setError(msg){
+  const bar = document.getElementById("errBar");
+  const txt = document.getElementById("errText");
+  if(!bar || !txt) return;
+  txt.textContent = msg || "Unknown error";
+  bar.style.display = "";
+}
+function clearError(){
+  const bar = document.getElementById("errBar");
+  if(bar) bar.style.display = "none";
+}
+
 function setConnected(connected, modeText){
   els.connDot.className = "dot " + (connected ? "ok" : "");
   els.connText.textContent = connected ? "Connected" : "Not connected";
@@ -765,7 +786,7 @@ function renderAuth(){
 function initSupabase(){
   if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
     setConnected(false, "Missing Supabase keys");
-    alert("Paste SUPABASE_URL and SUPABASE_ANON_KEY into the HTML <script> block.");
+    setError("Missing Supabase URL / anon key. Paste SUPABASE_URL and SUPABASE_ANON_KEY at the top of the script.");
     return false;
   }
   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1229,6 +1250,8 @@ async function doLogin(){
 }
 
 async function refreshAll(){
+  try{
+    clearError();
   loadAccessAuth();
   await fetchApproverRole();
   renderAuth();
@@ -1253,7 +1276,13 @@ async function refreshAll(){
   populateFilters();
   renderMonth();
   renderList();
+  }catch(e){
+    console.error(e);
+    setError((e && (e.message||e.error_description)) ? (e.message||e.error_description) : String(e));
+    setConnected(false, 'Error');
+  }
 }
+
 
 // --- Back button ---
 function gotoBack(){
