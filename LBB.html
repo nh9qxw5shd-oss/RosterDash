@@ -24,26 +24,41 @@
     }
 
     *{box-sizing:border-box}
-    body{
+    html, body{
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background:var(--bg);
       margin:0;
       color:var(--ink);
+      overflow-x:hidden;
+    }
+
+    /* Body offset so a fixed header never overlaps content (set precisely by JS) */
+    body{
+      padding-top: var(--hdrH, 92px);
     }
 
     header{
       background:var(--header);
       color:var(--headerInk);
-      /* iOS safe area so the header doesn't look like it's been guillotined */
-      padding: calc(.85rem + env(safe-area-inset-top)) 1.25rem .85rem;
+      position:fixed;
+      top:0; left:0; right:0;
+      width:100%;
+      z-index:10;
+      /* iOS safe areas */
+      padding-top: calc(.85rem + env(safe-area-inset-top));
+      padding-bottom: .85rem;
+      padding-left: calc(1.1rem + env(safe-area-inset-left));
+      padding-right: calc(1.1rem + env(safe-area-inset-right));
+    }
+    /* inner wrap keeps content aligned with main while header background stays full-bleed */
+    .headerInner{
+      max-width:1280px;
+      margin:0 auto;
       display:flex;
       justify-content:space-between;
       align-items:center;
       gap:.75rem;
-      flex-wrap:wrap; /* allow wrap on mobile instead of cutting off */
-      position:sticky;
-      top:0;
-      z-index:10;
+      flex-wrap:wrap;
     }
     header h1{
       font-size:1.05rem;
@@ -56,30 +71,53 @@
     }
     header .env{
       font-size:.8rem;
-      opacity:.9;
+      opacity:.95;
       display:flex;
       align-items:center;
       justify-content:flex-end;
       gap:.5rem;
       flex-wrap:wrap;
-      /* no nowrap: on mobile it was forcing overflow and looking "cut off" */
     }
 
-    /* Mobile header polish */
+    /* Mobile header: keep it compact (no cheap-looking deep banner) */
     @media (max-width: 640px){
       header{
-        padding: calc(.75rem + env(safe-area-inset-top)) 1rem .75rem;
-        align-items:stretch;
+        padding-top: calc(.45rem + env(safe-area-inset-top));
+        padding-bottom:.45rem;
+        padding-left: calc(.9rem + env(safe-area-inset-left));
+        padding-right: calc(.9rem + env(safe-area-inset-right));
+      }
+      .headerInner{
+        gap:.5rem;
+        align-items:flex-start;
       }
       header h1{
+        font-size:.98rem;
         white-space:normal;
       }
       header .env{
         justify-content:flex-start;
-      }
-      header .env #btnBack{
         width:100%;
       }
+      /* Back button was making the header feel like a chunky billboard */
+      header .env #btnBack{
+        width:auto;
+        max-width:220px;
+        margin:0 auto;
+        text-align:center;
+        padding:.45rem .7rem;
+        font-size:.85rem;
+      }
+      header .env .pill{
+        max-width:100%;
+        white-space:normal;
+      }
+    }
+
+    /* Extra-tight phones */
+    @media (max-width: 420px){
+      header h1{ font-size:.92rem; }
+      header .env #btnBack{ max-width:200px; }
     }
 
     main{
@@ -197,6 +235,7 @@
       border-radius:12px;
       overflow:hidden;
       background:#fff;
+      width:100%;
     }
     .dow{
       padding:.55rem .6rem;
@@ -210,6 +249,7 @@
     }
     .dayCell{
       min-height:105px;
+      min-width:0;
       border-right:1px solid var(--line);
       border-bottom:1px solid var(--line);
       padding:.55rem .6rem .6rem;
@@ -253,6 +293,14 @@
       font-size:.78rem;
       background:#fff;
       cursor:pointer;
+      max-width:100%;
+      overflow:hidden;
+    }
+    .eventChip .meta .name,
+    .eventChip .meta .sub{
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
     }
     .eventChip .meta{
       display:flex; flex-direction:column; gap:.15rem;
@@ -413,11 +461,13 @@
 
 <body>
   <header>
-    <h1>📓 Little Black Book <span class="pill"><span class="dot info"></span><span id="modeLabel">Supabase</span></span></h1>
+    <div class="headerInner">
+      <h1>📓 Little Black Book <span class="pill"><span class="dot info"></span><span id="modeLabel">Supabase</span></span></h1>
     <div class="env">
       <button class="ghost" id="btnBack">← Back to Roster</button>
       <span class="pill"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></span>
       <span class="pill"><span class="dot info"></span><span id="whoAmI">Not signed in</span></span>
+    </div>
     </div>
   </header>
 
@@ -799,6 +849,19 @@ const els = {
   btnSaveEntry: document.getElementById("btnSaveEntry"),
   btnDeleteEntry: document.getElementById("btnDeleteEntry"),
 };
+
+// ---- Mobile layout guardrail ----
+// iOS Safari can "widen" the page when content expands, which makes the header look truncated.
+// We run the header as fixed and set body padding-top to the measured header height.
+function syncHeaderHeight(){
+  const h = document.querySelector("header");
+  if(!h) return;
+  document.documentElement.style.setProperty("--hdrH", `${h.offsetHeight}px`);
+}
+window.addEventListener("resize", syncHeaderHeight, { passive: true });
+window.addEventListener("orientationchange", syncHeaderHeight, { passive: true });
+// initial run
+syncHeaderHeight();
 
 
 function setError(msg){
