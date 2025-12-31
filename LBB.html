@@ -385,8 +385,6 @@
     .muted{color:var(--muted)}
     .rightAlign{text-align:right}
   </style>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body>
@@ -409,6 +407,11 @@
 
 
   <main>
+  <div id="statusBar" style="display:none;background:#fff3cd;color:#7c2d12;border:1px solid #f59e0b;padding:.75rem 1rem;border-radius:.75rem;margin-bottom:1rem;">
+    <strong>Little Black Book diagnostic:</strong>
+    <div id="statusText" style="margin-top:.25rem;white-space:pre-wrap;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:.85rem;"></div>
+  </div>
+
     <div class="row">
       <div class="card" style="flex:1 1 680px;">
         <div class="toolbar">
@@ -419,7 +422,7 @@
             <span class="pill"><span class="dot info"></span><span id="windowLabel">12‑month window</span></span>
           </div>
           <div class="right">
-            <button id="btnLogin" class="secondary">Sign in</button>
+            <button id="btnLogin" onclick="lbbOpenLogin();return false;" class="secondary">Sign in</button>
             <button id="btnLogout" class="secondary" style="display:none;">Sign out</button>
             <button id="btnNew" disabled>+ New entry</button>
           </div>
@@ -529,7 +532,7 @@
     <div class="modal">
       <div class="modalHeader">
         <b>Sign in (5‑char access code)</b>
-        <button class="secondary tinyBtn" id="btnCloseLogin">Close</button>
+        <button class="secondary tinyBtn" id="btnCloseLogin" onclick="lbbCloseLogin();return false;">Close</button>
       </div>
 
       <div class="hint" style="margin-bottom:.75rem;">
@@ -610,6 +613,41 @@
   </div>
 
 <script>
+(function(){
+  const sb = () => document.getElementById('statusBar');
+  const st = () => document.getElementById('statusText');
+  function show(msg){
+    try{
+      sb().style.display = 'block';
+      st().textContent = msg;
+    }catch(e){}
+  }
+  window.addEventListener('error', (ev)=>{
+    const msg = (ev && (ev.message||ev.error)) ? String(ev.message||ev.error) : 'Unknown error';
+    show('JavaScript error: ' + msg + (ev && ev.filename ? '\n' + ev.filename + ':' + ev.lineno : ''));
+  });
+  window.addEventListener('unhandledrejection', (ev)=>{
+    show('Promise rejection: ' + String(ev.reason||ev));
+  });
+  window.lbbOpenLogin = function(){
+    const m = document.getElementById('loginBack');
+    if(m){ m.classList.add('show'); }
+  };
+  window.lbbCloseLogin = function(){
+    const m = document.getElementById('loginBack');
+    if(m){ m.classList.remove('show'); }
+  };
+  // basic config sanity check (catches line breaks / ellipsis)
+  window.lbbValidateConfig = function(url,key){
+    if(!url || !key) return 'Missing SUPABASE_URL or SUPABASE_ANON_KEY';
+    if(String(url).includes('\n') || String(key).includes('\n')) return 'Your SUPABASE_URL or SUPABASE_ANON_KEY contains a line break. It must be ONE LINE.';
+    if(String(key).includes('...')) return 'Your SUPABASE_ANON_KEY still contains "..." (ellipsis). Paste the FULL anon key from Supabase settings.';
+    return '';
+  };
+})();
+</script>
+
+<script type="module">
 /* ==========================================================
    Derby Control – Little Black Book (Calendar bolt‑on)
    - Supabase-backed (no local demo mode)
@@ -617,10 +655,19 @@
    - Optional admin approvals via existing roster Supabase Auth session
    ========================================================== */
 
-const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";
-    const SUPABASE_ANON_KEY =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM"; // <-- paste your anon key
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";      // <-- paste your project URL
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM"; // <-- paste your anon key
 const BACK_TO_ROSTER_URL = ""; // <-- optional; leave blank to use browser back()
+
+// Quick sanity check for iOS/no-console debugging
+const __cfgErr = (window.lbbValidateConfig ? window.lbbValidateConfig(SUPABASE_URL, SUPABASE_ANON_KEY) : "");
+if(__cfgErr){
+  const sb = document.getElementById('statusBar');
+  const st = document.getElementById('statusText');
+  if(sb && st){ sb.style.display = 'block'; st.textContent = __cfgErr; }
+}
 
 const pad2 = n => String(n).padStart(2,"0");
 const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -790,7 +837,7 @@ function initSupabase(){
     setError("Missing Supabase URL / anon key. Paste SUPABASE_URL and SUPABASE_ANON_KEY at the top of the script.");
     return false;
   }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  supabase = window.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   setConnected(true, "Supabase");
   return true;
 }
