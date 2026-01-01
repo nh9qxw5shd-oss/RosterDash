@@ -280,6 +280,8 @@
       border:1px solid var(--line);
       white-space:nowrap;
     }
+    .pillRow{display:flex; gap:.35rem; align-items:center; flex-wrap:wrap;}
+
     .tag.ok{border-color:rgba(22,163,74,.35); background:rgba(22,163,74,.07); color:#166534}
     .tag.warn{border-color:rgba(245,158,11,.35); background:rgba(245,158,11,.08); color:#92400e}
     .tag.bad{border-color:rgba(220,38,38,.35); background:rgba(220,38,38,.07); color:#991b1b}
@@ -426,6 +428,28 @@
     }
     .systemChip .muted{opacity:.85;font-weight:600}
     
+    /* === Roster-aligned leave colours === */
+
+/* Annual Leave (A/L) */
+.tag.al {
+  background:#dc2626;   /* roster red */
+  color:#ffffff;
+  border-color:#dc2626;
+}
+
+/* Compensation Leave (C/L) */
+.tag.cl {
+  background:#f97316;   /* roster orange */
+  color:#ffffff;
+  border-color:#f97316;
+}
+
+/* N/A */
+.tag.na {
+  background:#fde047;   /* roster yellow */
+  color:#000000;
+  border-color:#fde047;
+}
   </style>
 </head>
 
@@ -510,6 +534,7 @@
                   <option value="">All types</option>
                   <option value="AL">A/L</option>
                   <option value="CL">C/L</option>
+                  <option value="NA">N/A</option>
                   <option value="COURSE">Course</option>
                   <option value="MEETING">Meeting</option>
                   <option value="APPOINTMENT">Appointment</option>
@@ -616,6 +641,7 @@
           <select id="eType">
             <option value="AL">A/L</option>
             <option value="CL">C/L</option>
+            <option value="NA">N/A</option>
             <option value="COURSE">Course</option>
             <option value="MEETING">Meeting</option>
             <option value="APPOINTMENT">Appointment</option>
@@ -763,6 +789,7 @@ function normaliseText(s){ return (s||"").trim().replace(/\s+/g," "); }
 function entryTypeLabel(t){
   if(t==="AL") return "A/L";
   if(t==="CL") return "C/L";
+  if(t==="NA") return "N/A";
   if(t==="COURSE") return "Course";
   if(t==="MEETING") return "Meeting";
   if(t==="APPOINTMENT") return "Appointment";
@@ -776,6 +803,17 @@ function statusTag(status){
   if(status==="CANCELLED") return ["Cancelled","info"];
   return ["Unknown","info"];
 }
+
+function isCoverAffectingType(t){
+  return t === "AL" || t === "CL";
+}
+function typeClass(t){
+  if(t==="AL") return "al";
+  if(t==="CL") return "cl";
+  if(t==="NA") return "na";
+  return "info"; // fallback
+}
+
 
 function inRolling12Months(dateStr){
   const today = new Date(); today.setHours(0,0,0,0);
@@ -1057,12 +1095,16 @@ async function lookupPersonByCode(code){
 
 // --- Auto-approval likelihood (client-side preview)
 function computeStatusForNewEntry(person, entry){
+  // Only A/L and C/L are subject to the 1-per-link approval rule.
+  if(!isCoverAffectingType(entry.type)) return "AUTO_APPROVED";
+
   const days = eachDayInclusive(entry.start, entry.end);
   const inWindow = days.every(d=>inRolling12Months(d));
   if(!inWindow) return "PENDING";
 
   for(const d of days){
     const already = state.entries.some(e=>{
+      if(!isCoverAffectingType(e.type)) return false;
       if((e.link||"") !== (person.link||"")) return false;
       if(e.status==="REJECTED" || e.status==="CANCELLED") return false;
       const edays = eachDayInclusive(e.start, e.end);
@@ -1072,13 +1114,18 @@ function computeStatusForNewEntry(person, entry){
   }
   return "AUTO_APPROVED";
 }
-function autoLikelihood(person, start, end){
+function autoLikelihood(person, start, end, type){
+  if(!isCoverAffectingType(type)){
+    return {label:"No cover check for this entry type", cls:"info", hideStatus:true};
+  }
+
   const days = eachDayInclusive(start, end);
   const inWindow = days.every(d=>inRolling12Months(d));
   if(!inWindow) return {label:"Outside 12 months → Approval required", cls:"warn"};
 
   for(const d of days){
     const already = state.entries.some(e=>{
+      if(!isCoverAffectingType(e.type)) return false;
       if((e.link||"") !== (person.link||"")) return false;
       if(e.status==="REJECTED" || e.status==="CANCELLED") return false;
       const edays = eachDayInclusive(e.start, e.end);
@@ -1106,9 +1153,9 @@ function renderMonth(){
   els.windowLabel.textContent = `Window: ${start.toLocaleDateString("en-GB")} → ${end.toLocaleDateString("en-GB")}`;
 
   const monthEntries = state.entries;
-  els.kpiApproved.textContent = `Approved: ${monthEntries.filter(e=>e.status==="APPROVED"||e.status==="AUTO_APPROVED").length}`;
-  els.kpiPending.textContent = `Pending: ${monthEntries.filter(e=>e.status==="PENDING").length}`;
-  els.kpiRejected.textContent = `Rejected: ${monthEntries.filter(e=>e.status==="REJECTED").length}`;
+  els.kpiApproved.textContent = `Approved: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && (e.status==="APPROVED"||e.status==="AUTO_APPROVED")).length}`;
+  els.kpiPending.textContent = `Pending: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="PENDING").length}`;
+  els.kpiRejected.textContent = `Rejected: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="REJECTED").length}`;
 
   buildDOW();
 
@@ -1142,12 +1189,18 @@ function renderMonth(){
     events.slice(0,maxShow).forEach(e=>{
       const chip=document.createElement("div");
       chip.className="eventChip";
-      const [label, cls] = statusTag(e.status);
+      const typeLbl = entryTypeLabel(e.type);
+      const tcls = typeClass(e.type);
+      const [sLbl, sCls] = statusTag(e.status);
+      const showStatus = isCoverAffectingType(e.type) || (e.status !== "AUTO_APPROVED" && e.status !== "APPROVED");
       chip.innerHTML = `<div class="meta">
                           <b>${escapeHtml(e.personName)}</b>
-                          <span>${escapeHtml(e.team || "")}${e.team ? " • " : ""}${escapeHtml(e.link)} • ${escapeHtml(entryTypeLabel(e.type))}</span>
+                          <span>${escapeHtml(e.team || "")}${e.team ? " • " : ""}${escapeHtml(e.link)} • ${escapeHtml(typeLbl)}</span>
                         </div>
-                        <span class="tag ${cls}">${label}</span>`;
+                        <div class="pillRow">
+                          <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+                          ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
+                        </div>`;
       chip.title = e.notes || "";
       chip.addEventListener("click", ()=> openEntryModal(e.id));
       cell.appendChild(chip);
@@ -1165,6 +1218,7 @@ function renderMonth(){
   }
 }
 
+
 function populateFilters(){
   const links = Array.from(new Set([...state.people.map(p=>p.link).filter(Boolean), ...state.entries.map(e=>e.link).filter(Boolean)])).sort();
   const keep = els.fltLink.value;
@@ -1175,6 +1229,17 @@ function populateFilters(){
   const keepP = els.fltPerson.value;
   els.fltPerson.innerHTML = `<option value="">All people</option>` + people.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
   els.fltPerson.value = people.some(p=>p.id===keepP) ? keepP : "";
+}
+
+function renderTypeStatusPills(e){
+  const typeLbl = entryTypeLabel(e.type);
+  const tcls = typeClass(e.type);
+  const [sLbl, sCls] = statusTag(e.status);
+  const showStatus = isCoverAffectingType(e.type) || (e.status !== "AUTO_APPROVED" && e.status !== "APPROVED");
+  return `<div class="pillRow">
+            <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+            ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
+          </div>`;
 }
 
 function renderList(){
@@ -1198,9 +1263,8 @@ function renderList(){
   const isApprover = !!state.approverAuth;
 
   rows.forEach(e=>{
-    const [label, cls] = statusTag(e.status);
-    const canEdit = state.accessAuth && e.staffId === state.accessAuth.staffId;
-    const canDecide = isApprover && e.status==="PENDING";
+        const canEdit = state.accessAuth && e.staffId === state.accessAuth.staffId;
+    const canDecide = isApprover && isCoverAffectingType(e.type) && e.status==="PENDING";
 
     const tr=document.createElement("tr");
     tr.innerHTML = `<td>${escapeHtml(e.start)}${e.end!==e.start ? " → "+escapeHtml(e.end) : ""}</td>
@@ -1208,7 +1272,7 @@ function renderList(){
                     <td>${escapeHtml(e.team||"")}</td>
                     <td>${escapeHtml(e.link)}</td>
                     <td>${escapeHtml(entryTypeLabel(e.type))}</td>
-                    <td><span class="tag ${cls}">${label}</span></td>
+                    <td>${renderTypeStatusPills(e)}</td>
                     <td class="rightAlign">
                       ${canEdit ? `<button class="secondary tinyBtn" data-edit="${e.id}">Edit</button>` : `<span class="muted">—</span>`}
                       ${canDecide ? ` <button class="secondary tinyBtn" data-appr="${e.id}">Approve</button>
@@ -1260,8 +1324,7 @@ function openEntryModal(entryId){
   els.btnDeleteEntry.style.display = canEdit ? "" : "none";
 
   if(state.accessAuth){
-    const like = autoLikelihood(state.accessAuth, e.start, e.end);
-    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+    updateAutoHint();
   }else{
     els.autoHint.textContent = "Sign in to create or edit your own entries.";
   }
@@ -1282,11 +1345,23 @@ function openNewEntry(seedDateStr){
   els.eTeam.disabled = true;
   els.btnSaveEntry.style.display="";
   els.btnDeleteEntry.style.display="none";
-  const like = autoLikelihood(state.accessAuth, seed, seed);
-  els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+  updateAutoHint();
   els.entryBack.style.display="flex";
 }
 function closeEntry(){ els.entryBack.style.display="none"; }
+
+function updateAutoHint(){
+  if(!state.accessAuth){ els.autoHint.textContent = "Sign in to create or edit your own entries."; return; }
+  const type = els.eType.value;
+  const start = els.eStart.value;
+  const end = els.eEnd.value;
+  const like = autoLikelihood(state.accessAuth, start||isoDate(state.today), end||start||isoDate(state.today, els.eType.value), type);
+  if(like.hideStatus){
+    els.autoHint.innerHTML = `<span class="tag info">${escapeHtml(like.label)}</span>`;
+  }else{
+    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${escapeHtml(like.label)}</span>`;
+  }
+}
 
 // --- Writes (basic direct writes for v1; harden later via RPC + RLS)
 async function writeAudit(entryId, action, detail){
@@ -1322,7 +1397,11 @@ async function saveEntry(){
     status = computeStatusForNewEntry(state.accessAuth, {start, end, link, type});
   }else{
     const old = state.entries.find(x=>x.id===selectedEntryId);
-    status = old ? old.status : "PENDING";
+    if(!old){
+      status = isCoverAffectingType(type) ? "PENDING" : "AUTO_APPROVED";
+    }else{
+      status = isCoverAffectingType(type) ? old.status : "AUTO_APPROVED";
+    }
   }
 
   if(selectedEntryId){
@@ -1335,6 +1414,7 @@ async function saveEntry(){
         start_date: start,
         end_date: end,
         notes,
+        status,
         updated_by: "STAFF",
       })
       .eq("id", selectedEntryId)
@@ -1488,19 +1568,8 @@ els.btnSaveEntry.addEventListener("click", saveEntry);
 els.btnDeleteEntry.addEventListener("click", cancelEntry);
 
 ["change","input"].forEach(evt=>{
-  els.eStart.addEventListener(evt, ()=>{
-    if(!state.accessAuth) return;
-    const s = els.eStart.value || isoDate(state.today);
-    const e = els.eEnd.value || s;
-    const like = autoLikelihood(state.accessAuth, s, e);
-    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
-  });
-  els.eEnd.addEventListener(evt, ()=>{
-    if(!state.accessAuth) return;
-    const s = els.eStart.value || isoDate(state.today);
-    const e = els.eEnd.value || s;
-    const like = autoLikelihood(state.accessAuth, s, e);
-    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${like.label}</span>`;
+  [els.eStart, els.eEnd, els.eType, els.eLink].forEach(el=>{
+    el.addEventListener(evt, ()=>{ if(state.accessAuth) updateAutoHint(); });
   });
 });
 
