@@ -1269,7 +1269,7 @@ function renderMonth(){
       .filter(e=> (e.start <= dayStr && e.end >= dayStr) && e.status!=="CANCELLED")
       .sort((a,b)=> (a.link||"").localeCompare(b.link||"") || (a.personName||"").localeCompare(b.personName||""));
 
-    const maxShow=4;
+    const maxShow=999;
     events.slice(0,maxShow).forEach(e=>{
       const chip=document.createElement("div");
       chip.className="eventChip";
