@@ -757,6 +757,19 @@ if(__cfgErr){
 const pad2 = n => String(n).padStart(2,"0");
 const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 
+function fmtUKDateObj(d){
+  if(!d) return "";
+  const x = new Date(d);
+  return `${pad2(x.getDate())}/${pad2(x.getMonth()+1)}/${x.getFullYear()}`;
+}
+function fmtUKISO(iso){
+  if(!iso) return "";
+  // Expect YYYY-MM-DD; keep it deterministic (no locale surprises)
+  const [y,m,dd] = String(iso).split("-").map(Number);
+  if(!y||!m||!dd) return String(iso);
+  return `${pad2(dd)}/${pad2(m)}/${y}`;
+}
+
 function startOfDay(d){
   const x = new Date(d);
   x.setHours(0,0,0,0);
@@ -1221,7 +1234,7 @@ function renderMonth(){
 
   const start = new Date(state.today);
   const end = new Date(state.today); end.setMonth(end.getMonth()+12);
-  els.windowLabel.textContent = `Window: ${start.toLocaleDateString("en-GB")} → ${end.toLocaleDateString("en-GB")}`;
+  els.windowLabel.textContent = `Window: ${fmtUKDateObj(start)} → ${fmtUKDateObj(end)}`;
 
   const monthEntries = state.entriesMonth;
   els.kpiApproved.textContent = `Approved: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && (e.status==="APPROVED"||e.status==="AUTO_APPROVED")).length}`;
@@ -1353,7 +1366,7 @@ function renderList(){
     const canDecide = isApprover && isCoverAffectingType(e.type) && e.status==="PENDING";
 
     const tr=document.createElement("tr");
-    tr.innerHTML = `<td>${escapeHtml(e.start)}${e.end!==e.start ? " → "+escapeHtml(e.end) : ""}</td>
+    tr.innerHTML = `<td>${escapeHtml(fmtUKISO(e.start))}${e.end!==e.start ? " → "+escapeHtml(fmtUKISO(e.end)) : ""}</td>
                     <td>${escapeHtml(e.personName)}</td>
                     <td>${escapeHtml(e.team||"")}</td>
                     <td>${escapeHtml(e.link)}</td>
