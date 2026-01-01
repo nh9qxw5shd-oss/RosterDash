@@ -939,6 +939,7 @@
         <th>Section</th>
         <th>Shift</th>
         <th>Interest</th>
+        <th>Peter’s Notebook</th>
       </tr>
     </thead>
     <tbody id="shift-market-tbody"></tbody>
@@ -3387,18 +3388,45 @@ await saveVersionSnapshotForWeek(weekId, struct);
         console.warn("refreshShiftMarket interest exception", e);
       }
 
-      const interestByKey = {};
+      
+      // Load "Peter's Notebook" notes (optional table)
+      let noteRows = [];
+      try {
+        const { data: notesData, error: notesErr } = await supabase
+          .from("shift_market_notes")
+          .select("id, week_id, section_id, day_key, slot, note, created_at, created_by, link")
+          .eq("link", currentLink)
+          .order("created_at", { ascending: true });
+
+        if (notesErr) {
+          console.warn("refreshShiftMarket notes error", notesErr);
+        } else {
+          noteRows = notesData || [];
+        }
+      } catch (e) {
+        console.warn("refreshShiftMarket notes exception", e);
+      }
+
+const interestByKey = {};
       interestRows.forEach((row) => {
         const key = `${row.week_id}|${row.section_id || ""}|${row.day_key}|${row.slot}`;
         if (!interestByKey[key]) interestByKey[key] = [];
         interestByKey[key].push(row);
       });
 
-      const usageMap = buildUsageMap();
+      
+      const notesByKey = {};
+      noteRows.forEach((row) => {
+        const key = `${row.week_id}|${row.section_id || ""}|${row.day_key}|${row.slot}`;
+        if (!notesByKey[key]) notesByKey[key] = [];
+        notesByKey[key].push(row);
+      });
+
+const usageMap = buildUsageMap();
 
       if (!entries.length) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="6" class="muted">No uncovered published shifts from the current week onwards.</td>`;
+        tr.innerHTML = `<td colspan="7" class="muted">No uncovered published shifts from the current week onwards.</td>`;
         shiftMarketTbody.appendChild(tr);
         return;
       }
@@ -3612,6 +3640,115 @@ if (interested.length) {
 interestTd.appendChild(rankDiv);
 
         tr.appendChild(interestTd);
+
+        // --- Peter's Notebook (notes) ---
+        const notesTd = document.createElement("td");
+        notesTd.style.textAlign = "left";
+
+        const notes = notesByKey[key] || [];
+        const notesWrap = document.createElement("div");
+        notesWrap.className = "flex";
+        notesWrap.style.alignItems = "center";
+        notesWrap.style.gap = "0.35rem";
+
+        const btnAddNote = document.createElement("button");
+        btnAddNote.className = "btn btn-sm";
+        btnAddNote.textContent = "Add Note";
+        btnAddNote.disabled = !canManageRoster();
+        btnAddNote.title = canManageRoster()
+          ? "Add a note about who this shift was offered to."
+          : "Sign in as editor/admin to add notes.";
+
+        btnAddNote.addEventListener("click", async () => {
+          const txt = prompt("Add note for this shift (e.g., offered to X, called Y, waiting reply):");
+          if (!txt || !txt.trim()) return;
+
+          const payload = {
+            week_id: e.weekId,
+            section_id: e.sectionId,
+            day_key: e.dayKey,
+            slot: e.slot,
+            link: currentLink,
+            note: txt.trim(),
+            created_by: (currentProfile?.full_name || currentUser?.email || "unknown")
+          };
+
+          try {
+            const { error } = await supabase.from("shift_market_notes").insert(payload);
+            if (error) {
+              console.warn("Add note failed", error);
+              alert("Couldn't save note. Check RLS/policies for shift_market_notes.");
+              return;
+            }
+            await refreshShiftMarket();
+          } catch (err) {
+            console.warn("Add note exception", err);
+            alert("Couldn't save note (exception).");
+          }
+        });
+
+        const btnShowNotes = document.createElement("button");
+        btnShowNotes.className = "btn btn-sm";
+        btnShowNotes.textContent = notes.length ? `Show notes (${notes.length})` : "No notes";
+        btnShowNotes.disabled = !notes.length;
+
+        btnShowNotes.addEventListener("click", () => {
+          // Toggle a detail row directly under this row
+          const next = tr.nextElementSibling;
+          if (next && next.classList && next.classList.contains("shift-note-row") && next.dataset.shiftKey === key) {
+            next.remove();
+            btnShowNotes.textContent = `Show notes (${notes.length})`;
+            return;
+          }
+
+          // remove any existing notes row for this key elsewhere (optional tidy)
+          const existing = shiftMarketTbody.querySelector(`tr.shift-note-row[data-shift-key="${key}"]`);
+          if (existing) existing.remove();
+
+          const detailTr = document.createElement("tr");
+          detailTr.className = "shift-note-row";
+          detailTr.dataset.shiftKey = key;
+
+          const detailTd = document.createElement("td");
+          detailTd.colSpan = 7; // status, week ending, date, section, shift, interest, notebook
+
+          const box = document.createElement("div");
+          box.style.padding = "0.5rem 0.75rem";
+          box.style.background = "rgba(17,24,39,0.03)";
+          box.style.border = "1px solid rgba(17,24,39,0.12)";
+          box.style.borderRadius = "0.75rem";
+
+          const title = document.createElement("div");
+          title.style.fontWeight = "700";
+          title.style.marginBottom = "0.35rem";
+          title.textContent = "Peter’s Notebook";
+          box.appendChild(title);
+
+          const ul = document.createElement("ul");
+          ul.style.margin = "0";
+          ul.style.paddingLeft = "1.1rem";
+
+          notes.forEach((n) => {
+            const li = document.createElement("li");
+            const when = n.created_at ? formatUK(n.created_at) : "";
+            const who = n.created_by ? ` · ${n.created_by}` : "";
+            li.textContent = `${n.note}${when ? " — " + when : ""}${who}`;
+            ul.appendChild(li);
+          });
+
+          box.appendChild(ul);
+          detailTd.appendChild(box);
+          detailTr.appendChild(detailTd);
+
+          tr.insertAdjacentElement("afterend", detailTr);
+          btnShowNotes.textContent = "Hide notes";
+        });
+
+        notesWrap.appendChild(btnShowNotes);
+        notesWrap.appendChild(btnAddNote);
+        notesTd.appendChild(notesWrap);
+        tr.appendChild(notesTd);
+
         shiftMarketTbody.appendChild(tr);
       });
     }
