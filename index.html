@@ -964,6 +964,7 @@
   <span id="editor-status-pill" class="status-pill"></span>
   <button id="btn-save-week" class="btn btn-primary btn-sm">Save draft</button>
   <button id="btn-publish-week" class="btn btn-sm">Publish</button>
+  <button id="btn-sync-lbb" class="btn btn-sm" title="Apply approved A/L, C/L and N/A from Little Black Book to this roster week">Sync LBB leave</button>
   <button id="btn-change-log" class="btn btn-sm">Change log</button>
   <label class="muted" style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;">
     <input type="checkbox" id="toggle-readonly" />
@@ -1184,6 +1185,7 @@ function canManageRoster() {
     const rosterGrid = document.getElementById("roster-grid");
     const btnSaveWeek = document.getElementById("btn-save-week");
     const btnPublishWeek = document.getElementById("btn-publish-week");
+    const btnSyncLBB = document.getElementById("btn-sync-lbb");
     const btnPrintWeek = document.getElementById("btn-print-week");
     const readonlyToggle = document.getElementById("toggle-readonly");
     const rosterFilterInput = document.getElementById("roster-filter");
@@ -2144,7 +2146,146 @@ function shouldAutoExpandMonth(year, monthIdx) {
     }
 
     // ===== ROSTER RENDERING =====
-    function renderRosterGrid(data) {
+    
+    // ===== Little Black Book (calendar) -> Roster tag sync =====
+    function isoDate(d){
+      const x = new Date(d);
+      if (isNaN(x)) return null;
+      const y = x.getFullYear();
+      const m = String(x.getMonth()+1).padStart(2,"0");
+      const da = String(x.getDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }
+    function addDays(d, n){
+      const x = new Date(d);
+      x.setDate(x.getDate() + n);
+      return x;
+    }
+    function datesOverlap(aStart, aEnd, bStart, bEnd){
+      return aStart <= bEnd && aEnd >= bStart;
+    }
+    function ensureRowTagsForSync(row){
+      if (!row.tags || typeof row.tags !== "object") row.tags = {};
+    }
+    function addTagToRowDay(row, dayKey, tag){
+      ensureRowTagsForSync(row);
+      const up = String(tag||"").toUpperCase();
+      if (!up) return;
+      const cur = Array.isArray(row.tags[dayKey]) ? row.tags[dayKey] : [];
+      const exists = cur.some(t => String(t).toUpperCase() === up);
+      if (!exists){
+        cur.push(up);
+        row.tags[dayKey] = cur;
+      }
+    }
+    function cellAllowsNA(row, dayKey){
+      // N/A should only apply to: blank cells, RD cells, or Sundays.
+      if (String(dayKey).toLowerCase() === "sun") return true;
+      const v = String(row.shifts?.[dayKey] || "").trim().toUpperCase();
+      if (!v) return true;
+      // Treat any RD-prefixed cell as eligible (RD / RDW / RD (something))
+      if (v === "RD" || v.startsWith("RD")) return true;
+      return false;
+    }
+
+    async function syncLeaveFromLBB(){
+      if (!currentWeek || !currentWeek.week_ending || !currentWeek.data){
+        alert("Open a roster week first.");
+        return;
+      }
+      if (!supabase){
+        alert("Supabase client not initialised.");
+        return;
+      }
+
+      const end = new Date(currentWeek.week_ending);          // week ending (usually Saturday)
+      if (isNaN(end)){
+        alert("Week ending date is invalid.");
+        return;
+      }
+      const start = addDays(end, -6);                         // Sunday start
+      const startStr = isoDate(start);
+      const endStr   = isoDate(end);
+
+      const ok = confirm(
+        `Sync approved Little Black Book entries into this roster week?\n\nWeek: ${formatUK(startStr)} to ${formatUK(endStr)}\n\nRules:\n• A/L + C/L tags always apply (even if a turn of duty is shown)\n• N/A only applies to blank / RD cells, or Sunday\n\nThis updates the open week (draft) only.`
+      );
+      if (!ok) return;
+
+      // Pull approved calendar entries overlapping this roster week
+      const { data: entries, error } = await supabase
+        .from("calendar_entries")
+        .select("id, start_date, end_date, entry_type, status, staff_directory(canonical_name)")
+        .in("status", ["AUTO_APPROVED", "APPROVED"])
+        .in("entry_type", ["AL","CL","NA"])
+        .lte("start_date", endStr)
+        .gte("end_date", startStr);
+
+      if (error){
+        console.error(error);
+        alert("Failed to pull Little Black Book entries. Check Supabase permissions / table names.");
+        return;
+      }
+
+      const days = ["sun","mon","tue","wed","thu","fri","sat"];
+      const startTime = new Date(startStr + "T00:00:00");
+      const endTime   = new Date(endStr   + "T23:59:59");
+
+      let applied = 0;
+
+      const byName = new Map();
+      (entries || []).forEach(e=>{
+        const name = (e.staff_directory && e.staff_directory.canonical_name) ? String(e.staff_directory.canonical_name).trim() : "";
+        if (!name) return;
+        if (!byName.has(name)) byName.set(name, []);
+        byName.get(name).push(e);
+      });
+
+      // Walk roster rows and apply tags where calendar overlap exists
+      currentWeek.data.sections.forEach(section=>{
+        (section.rows || []).forEach(row=>{
+          const name = String(row.staff_name || "").trim();
+          if (!name) return;
+
+          const staffEntries = byName.get(name);
+          if (!staffEntries || !staffEntries.length) return;
+
+          staffEntries.forEach(e=>{
+            const eStart = new Date(String(e.start_date) + "T00:00:00");
+            const eEnd   = new Date(String(e.end_date)   + "T23:59:59");
+            if (!datesOverlap(eStart, eEnd, startTime, endTime)) return;
+
+            // Apply for each day in the roster week
+            for (let i=0;i<7;i++){
+              const d = addDays(startTime, i);
+              if (d < eStart || d > eEnd) continue;
+
+              const dayKey = days[i];
+              const type = String(e.entry_type || "").toUpperCase();
+
+              if (type === "AL" || type === "CL"){
+                addTagToRowDay(row, dayKey, type);
+                applied++;
+              } else if (type === "NA"){
+                if (cellAllowsNA(row, dayKey)){
+                  addTagToRowDay(row, dayKey, "NA");
+                  applied++;
+                }
+              }
+            }
+          });
+        });
+      });
+
+      hasUnsavedChanges = true;
+      renderRosterGrid(currentWeek.data);
+      syncEditorButtons();
+
+      alert(`LBB sync complete. Tags applied: ${applied}\n\nRemember to Save draft / Publish when happy.`);
+    }
+
+
+function renderRosterGrid(data) {
       rosterGrid.innerHTML = "";
 
       if (!data || !Array.isArray(data.sections)) {
@@ -2609,7 +2750,14 @@ async function saveVersionSnapshotForWeek(weekId, snapshotData) {
   }
 }
 
-   btnPublishWeek.addEventListener("click", async () => {
+   
+    if (btnSyncLBB) {
+      btnSyncLBB.addEventListener("click", async () => {
+        try { await syncLeaveFromLBB(); } catch (e) { console.error(e); alert("Sync failed. Check console."); }
+      });
+    }
+
+btnPublishWeek.addEventListener("click", async () => {
   const role = currentProfile?.role || "viewer";
   const canPublish =
     !isPublicViewer && (role === "admin" || role === "editor");
