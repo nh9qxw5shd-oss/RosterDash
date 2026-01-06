@@ -715,7 +715,25 @@
         page-break-inside: avoid;
       }
     }
-  </style>
+  
+    /* LBB mismatch badge (subtle, no drama) */
+    .lbb-missing-badge{
+      display:none;
+      margin-left: .5rem;
+      padding: .15rem .45rem;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 700;
+      border: 1px solid rgba(0,0,0,.15);
+      background: #fbbf24; /* warm amber */
+      color: #111827;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+    .lbb-missing-badge.is-on{ display:inline-flex; align-items:center; gap:.35rem; }
+
+</style>
 </head>
 <body>
  <header class="no-print">
@@ -965,6 +983,7 @@
   <button id="btn-save-week" class="btn btn-primary btn-sm">Save draft</button>
   <button id="btn-publish-week" class="btn btn-sm">Publish</button>
   <button id="btn-sync-lbb" class="btn btn-sm" title="Apply approved A/L, C/L and N/A from Little Black Book to this roster week">Sync LBB leave</button>
+  <span id="lbb-missing-badge" class="lbb-missing-badge" title="LBB-approved A/L or C/L not tagged in this published week"></span>
   <button id="btn-change-log" class="btn btn-sm">Change log</button>
   <label class="muted" style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;">
     <input type="checkbox" id="toggle-readonly" />
@@ -1186,7 +1205,9 @@ function canManageRoster() {
     const btnSaveWeek = document.getElementById("btn-save-week");
     const btnPublishWeek = document.getElementById("btn-publish-week");
     const btnSyncLBB = document.getElementById("btn-sync-lbb");
-    const btnPrintWeek = document.getElementById("btn-print-week");
+    
+    const lbbMissingBadge = document.getElementById("lbb-missing-badge");
+const btnPrintWeek = document.getElementById("btn-print-week");
     const readonlyToggle = document.getElementById("toggle-readonly");
     const rosterFilterInput = document.getElementById("roster-filter");
 const btnChangeLog = document.getElementById("btn-change-log");
@@ -1254,7 +1275,8 @@ if (btnAwardShift) {
         syncTagTrayVisibility();
         if (currentWeek) {
           renderRosterGrid(currentWeek.data);
-        }
+          runPostRenderChecks();
+          }
       });
     }
 
@@ -2142,7 +2164,7 @@ function shouldAutoExpandMonth(year, monthIdx) {
       hasUnsavedChanges = true;
 
       renderRosterGrid(currentWeek.data);
-      updateCoverageBanner();
+      runPostRenderChecks();
     }
 
     // ===== ROSTER RENDERING =====
@@ -2279,6 +2301,7 @@ function shouldAutoExpandMonth(year, monthIdx) {
 
       hasUnsavedChanges = true;
       renderRosterGrid(currentWeek.data);
+      runPostRenderChecks();
       syncEditorButtons();
 
       alert(`LBB sync complete. Tags applied: ${applied}\n\nRemember to Save draft / Publish when happy.`);
@@ -2752,7 +2775,124 @@ async function saveVersionSnapshotForWeek(weekId, snapshotData) {
 
    
     if (btnSyncLBB) {
-      btnSyncLBB.addEventListener("click", async () => {
+      
+    // ===== LBB ↔ Roster consistency check (published weeks) =====
+    async function checkLBBMissingLeaveForCurrentWeek(){
+      try{
+        if (!currentWeek || !currentWeek.week_ending || !currentWeek.data) {
+          if (lbbMissingBadge) { lbbMissingBadge.classList.remove("is-on"); lbbMissingBadge.style.display="none"; }
+          return;
+        }
+        if (!supabase) return;
+
+        // Only flag when the week is published (drafts can be mid-edit)
+        const status = String(currentWeek.status || "").toLowerCase();
+        if (status !== "published") {
+          if (lbbMissingBadge) { lbbMissingBadge.classList.remove("is-on"); lbbMissingBadge.style.display="none"; }
+          return;
+        }
+
+        const end = new Date(currentWeek.week_ending);
+        if (isNaN(end)) return;
+        const start = new Date(end.getTime());
+        start.setDate(start.getDate() - 6);
+
+        const startISO = start.toISOString().slice(0,10);
+        const endISO   = end.toISOString().slice(0,10);
+
+        // Pull approved LBB AL/CL entries overlapping this week
+        const { data: entries, error } = await supabase
+          .from("calendar_entries")
+          .select("id, start_date, end_date, entry_type, status, staff_directory(canonical_name)")
+          .gte("end_date", startISO)
+          .lte("start_date", endISO)
+          .in("entry_type", ["AL","CL"])
+          .in("status", ["AUTO_APPROVED","APPROVED"]);
+
+        if (error){
+          console.warn("LBB mismatch check query error", error);
+          if (lbbMissingBadge) { lbbMissingBadge.classList.remove("is-on"); lbbMissingBadge.style.display="none"; }
+          return;
+        }
+
+        const days = ["sun","mon","tue","wed","thu","fri","sat"];
+
+        // Build a quick lookup of roster tags by name+dayKey
+        const rosterTagMap = new Map(); // name -> dayKey -> Set(tags)
+        (currentWeek.data.sections || []).forEach(sec=>{
+          (sec.rows || []).forEach(row=>{
+            const name = String(row.staff_name || "").trim();
+            if (!name) return;
+            const byDay = new Map();
+            days.forEach(k=>{
+              const arr = Array.isArray(row.tags?.[k]) ? row.tags[k] : [];
+              byDay.set(k, new Set(arr.map(t=>String(t).toUpperCase())));
+            });
+            rosterTagMap.set(name, byDay);
+          });
+        });
+
+        const missing = []; // {name,date,type}
+        (entries || []).forEach(e=>{
+          const name = String(e.staff_directory?.canonical_name || "").trim();
+          if (!name) return;
+          const byDay = rosterTagMap.get(name);
+          if (!byDay) return; // not on this template/week (fine)
+
+          const eStart = new Date(e.start_date);
+          const eEnd = new Date(e.end_date);
+          if (isNaN(eStart) || isNaN(eEnd)) return;
+
+          for (let i=0;i<7;i++){
+            const d = new Date(start.getTime());
+            d.setDate(d.getDate()+i);
+            if (d < eStart || d > eEnd) continue;
+
+            const dayKey = days[i];
+            const need = String(e.entry_type || "").toUpperCase();
+            const tagSet = byDay.get(dayKey);
+            if (!tagSet || !tagSet.has(need)){
+              missing.push({ name, date: d.toISOString().slice(0,10), type: need });
+            }
+          }
+        });
+
+        if (!lbbMissingBadge) return;
+
+        if (missing.length){
+          lbbMissingBadge.textContent = `⚠️ LBB mismatch: ${missing.length}`;
+          lbbMissingBadge.classList.add("is-on");
+          lbbMissingBadge.style.display="inline-flex";
+
+          lbbMissingBadge.onclick = () => {
+            const lines = missing
+              .slice(0, 80)
+              .map(m => `${m.date} — ${m.name} (${m.type})`)
+              .join("\n");
+            const extra = missing.length > 80 ? `\n\n…and ${missing.length-80} more` : "";
+            alert(
+              `Published week is missing A/L or C/L tags that exist as approved entries in Little Black Book.\n\n` +
+              lines + extra +
+              `\n\nFix options:\n- Use “Sync LBB leave”\n- Or manually tag the relevant cells`
+            );
+          };
+        } else {
+          lbbMissingBadge.classList.remove("is-on");
+          lbbMissingBadge.style.display="none";
+        }
+      } catch (err){
+        console.warn("LBB mismatch check failed", err);
+        if (lbbMissingBadge) { lbbMissingBadge.classList.remove("is-on"); lbbMissingBadge.style.display="none"; }
+      }
+    }
+
+    function runPostRenderChecks(){
+      updateCoverageBanner();
+      // fire-and-forget: we don't want to block UI on a warning badge
+      checkLBBMissingLeaveForCurrentWeek();
+    }
+
+btnSyncLBB.addEventListener("click", async () => {
         try { await syncLeaveFromLBB(); } catch (e) { console.error(e); alert("Sync failed. Check console."); }
       });
     }
@@ -3436,7 +3576,7 @@ await saveVersionSnapshotForWeek(weekId, struct);
       currentWeek = refreshed;
       ensureSpareOrigin(currentWeek.data);
       renderRosterGrid(currentWeek.data);
-      updateCoverageBanner();
+      runPostRenderChecks();
       syncEditorButtons();
       hasUnsavedChanges = false;
     }
