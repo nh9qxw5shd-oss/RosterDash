@@ -884,7 +884,7 @@ min-width: 0;
         </label>
 
         <div class="actions">
-          <button id="entryBack" class="btn2" type="button" style="display:none;">Back</button>
+          <button id="btnBackUnused" class="btn2" type="button" style="display:none;">Back</button>
           <button id="loginBack" class="btn2" type="button">Cancel</button>
           <button id="btnDoLogin" class="btn2 primary" type="button">Sign in</button>
         </div>
@@ -936,7 +936,7 @@ min-width: 0;
         </div>
 
         <div class="actions">
-          <button id="entryBack" class="btn2" type="button" style="display:none;">Back</button>
+          <button id="btnBackUnused2" class="btn2" type="button" style="display:none;">Back</button>
           <button id="btnDeleteEntry" class="btn2 danger" type="button" style="margin-right:auto; display:none;">Delete</button>
           <button id="btnSaveEntry" class="btn2 primary" type="button">Save</button>
         </div>
@@ -1167,7 +1167,7 @@ const els = {
   rememberMe: document.getElementById("rememberMe"),
   btnDoLogin: document.getElementById("btnDoLogin"),
 
-  entryBack: document.getElementById("entryBack"),
+  entryModal: document.getElementById("entryModal"),
   btnCloseEntry: document.getElementById("btnCloseEntry"),
   entryTitle: document.getElementById("entryTitle"),
   eType: document.getElementById("eType"),
@@ -1716,7 +1716,7 @@ function openEntryModal(entryId){
     els.autoHint.textContent = "Sign in to create or edit your own entries.";
   }
 
-  els.entryBack.style.display="flex";
+  els.entryModal.style.display="flex";
 }
 
 function openNewEntry(seedDateStr){
@@ -1733,9 +1733,9 @@ function openNewEntry(seedDateStr){
   els.btnSaveEntry.style.display="";
   els.btnDeleteEntry.style.display="none";
   updateAutoHint();
-  els.entryBack.style.display="flex";
+  els.entryModal.style.display="flex";
 }
-function closeEntry(){ els.entryBack.style.display="none"; }
+function closeEntry(){ els.entryModal.style.display="none"; }
 
 function updateAutoHint(){
   if(!state.accessAuth){ els.autoHint.textContent = "Sign in to create or edit your own entries."; return; }
@@ -1970,7 +1970,7 @@ els.btnDoLogin.addEventListener("click", doLogin);
 els.accessCode.addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
 
 els.btnCloseEntry.addEventListener("click", closeEntry);
-els.entryBack.addEventListener("click", (e)=>{ if(e.target===els.entryBack) closeEntry(); });
+els.entryModal.addEventListener("click", (e)=>{ if(e.target===els.entryModal) closeEntry(); });
 els.btnSaveEntry.addEventListener("click", saveEntry);
 els.btnDeleteEntry.addEventListener("click", cancelEntry);
 
