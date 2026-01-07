@@ -728,6 +728,9 @@ min-width: 0;
 .wrap{max-width:calc(100vw - 24px)!important;}
 
 select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
+
+.titleRow{display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap}
+.cardTitle{font-weight:900; font-size:1.05rem}
 </style>
 </head>
 <body>
@@ -770,6 +773,7 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
     <div class="tabs">
       <button id="tabCalendar" class="tab" aria-selected="true">Calendar</button>
       <button id="tabList" class="tab" aria-selected="false">List view</button>
+      <button id="tabApprovals" class="tab" aria-selected="false" style="display:none;">Approvals</button>
     </div>
 
     <!-- ===== Calendar panel ===== -->
@@ -865,6 +869,44 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
         </div>
       </div>
     </section>
+
+    <!-- ===== Approvals panel (approvers only) ===== -->
+    <section id="panelApprovals" class="panel">
+      <div class="card">
+        <div class="card-hd">
+          <div class="titleRow">
+            <div>
+              <div class="cardTitle">Pending requests</div>
+              <div class="subtle">Only <b>A/L</b> and <b>C/L</b> can be pending (2nd+ request in same link/day).</div>
+            </div>
+            <span class="chip" style="background:#fff; color:var(--ink); border-color:var(--line);">
+              <span class="dot warn" style="background:#f59e0b; box-shadow:none;"></span>
+              <span id="pendingCount">0 pending</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="card-bd">
+          <div class="tableWrap">
+            <table class="table" id="pendingTable">
+              <thead>
+                <tr>
+                  <th>Date(s)</th>
+                  <th>Person</th>
+                  <th>Team</th>
+                  <th>Link</th>
+                  <th>Type</th>
+                  <th>Notes</th>
+                  <th class="rightAlign">Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- ===== Login modal ===== -->
@@ -1086,6 +1128,15 @@ function typeClass(t){
   if(t==="CL") return "cl";
   if(t==="NA") return "na";
   return "info"; // fallback
+}
+
+function typeLabel(t){
+  if(t==="AL") return "A/L";
+  if(t==="CL") return "C/L";
+  if(t==="NA") return "N/A";
+  if(t==="COURSE") return "Course";
+  if(t==="MEETING") return "Meeting";
+  return "Other";
 }
 
 
@@ -1454,6 +1505,75 @@ async function fetchYearEntries(year){
     updatedAt: x.updated_at || ""
   }));
 }
+
+
+async function fetchPendingEntriesForYear(year){
+  const start = `${year}-01-01`;
+  const end   = `${year}-12-31`;
+  const { data, error } = await supabase
+    .from("calendar_entries")
+    .select("id, staff_id, start_date, end_date, entry_type, notes, status, created_at")
+    .eq("status", "PENDING")
+    .in("entry_type", ["AL","CL"])
+    .gte("start_date", start)
+    .lte("start_date", end)
+    .order("created_at", { ascending: true });
+
+  if(error){ console.error(error); return []; }
+  return data || [];
+}
+
+function renderPendingPanel(pendingRows){
+  const panel = document.getElementById("panelApprovals");
+  const tab = document.getElementById("tabApprovals");
+  const countEl = document.getElementById("pendingCount");
+  const table = document.getElementById("pendingTable");
+  const tbody = table ? table.querySelector("tbody") : null;
+
+  const isApprover = !!state.approverAuth;
+
+  if(tab) tab.style.display = isApprover ? "" : "none";
+  if(panel) panel.style.display = isApprover ? "" : "none";
+
+  if(!isApprover || !tbody || !countEl) return;
+
+  countEl.textContent = `${pendingRows.length} pending`;
+  const peopleById = new Map(state.people.map(p=>[p.id, p]));
+  tbody.innerHTML = "";
+
+  if(!pendingRows.length){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="7" class="muted">No pending requests.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  pendingRows.forEach(e=>{
+    const p = peopleById.get(e.staff_id);
+    const name = p?.name || "Unknown";
+    const team = p?.team || "";
+    const link = p?.link || "";
+
+    const tr = document.createElement("tr");
+    const dateTxt = `${escapeHtml(fmtUKISO(e.start_date))}${e.end_date!==e.start_date ? " → "+escapeHtml(fmtUKISO(e.end_date)) : ""}`;
+    tr.innerHTML = `
+      <td>${dateTxt}</td>
+      <td><b>${escapeHtml(name)}</b></td>
+      <td>${escapeHtml(team)}</td>
+      <td>${escapeHtml(link)}</td>
+      <td><span class="tag ${typeClass(e.entry_type)}">${escapeHtml(typeLabel(e.entry_type))}</span></td>
+      <td class="muted">${escapeHtml(e.notes || "")}</td>
+      <td class="rightAlign">
+        <button class="btn2" type="button" data-act="approve">Approve</button>
+        <button class="btn2" type="button" data-act="reject" style="border-color:#fecaca; color:#991b1b;">Reject</button>
+      </td>
+    `;
+    tr.querySelector('[data-act="approve"]').addEventListener("click", ()=>decideEntry(e.id, "APPROVED"));
+    tr.querySelector('[data-act="reject"]').addEventListener("click", ()=>decideEntry(e.id, "REJECTED"));
+    tbody.appendChild(tr);
+  });
+}
+
 
 
 async function lookupPersonByCode(code){
@@ -1955,6 +2075,14 @@ async function refreshAll(){
   state.people = await fetchPeople();
   state.entriesMonth = await fetchMonthEntries();
 
+  // Approvals: fetch pending leave for visible year (approvers only)
+  if(state.approverAuth){
+    state.pending = await fetchPendingEntriesForYear(state.viewMonth.getFullYear());
+  }else{
+    state.pending = [];
+  }
+
+
   // If list is scoped to whole year, fetch/cache year data for the visible year.
   const scope = (els.fltScope && els.fltScope.value) ? els.fltScope.value : "view";
   if(scope==="year"){
@@ -1986,6 +2114,8 @@ async function refreshAll(){
   populateFilters();
   renderMonth();
   renderList();
+  renderPendingPanel(state.pending || []);
+
   }catch(e){
     console.error(e);
     setError((e && (e.message||e.error_description)) ? (e.message||e.error_description) : String(e));
@@ -2056,21 +2186,31 @@ if(els.fltScope){
   // ===== Tabs (UI only; does not touch business logic) =====
   const tabCalendar = document.getElementById('tabCalendar');
   const tabList = document.getElementById('tabList');
+  const tabApprovals = document.getElementById('tabApprovals');
   const panelCalendar = document.getElementById('panelCalendar');
   const panelList = document.getElementById('panelList');
+  const panelApprovals = document.getElementById('panelApprovals');
 
   function setTab(which) {
     const cal = which === 'cal';
+    const list = which === 'list';
+    const appr = which === 'appr';
+
     tabCalendar.setAttribute('aria-selected', cal ? 'true' : 'false');
-    tabList.setAttribute('aria-selected', cal ? 'false' : 'true');
+    tabList.setAttribute('aria-selected', list ? 'true' : 'false');
+    tabApprovals && tabApprovals.setAttribute('aria-selected', appr ? 'true' : 'false');
+
     panelCalendar.classList.toggle('active', cal);
-    panelList.classList.toggle('active', !cal);
+    panelList.classList.toggle('active', list);
+    panelApprovals && panelApprovals.classList.toggle('active', appr);
+
     // Keep scroll position sane
     window.scrollTo({ top: 0, behavior: 'instant' });
   }
 
   tabCalendar?.addEventListener('click', () => setTab('cal'));
   tabList?.addEventListener('click', () => setTab('list'));
+  tabApprovals?.addEventListener('click', () => setTab('appr'));
 
   // If user clicks a “List” edit action (if present), ensure list tab is visible.
   window.__LBB_setTab = setTab;
