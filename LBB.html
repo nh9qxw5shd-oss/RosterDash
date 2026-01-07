@@ -726,6 +726,8 @@ min-width: 0;
 .entryMeta{min-width:0;}
 .calendar{overflow-x:auto;}
 .wrap{max-width:calc(100vw - 24px)!important;}
+
+select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
 </style>
 </head>
 <body>
@@ -1111,6 +1113,46 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;").replaceAll("'","&#039;");
 }
 
+function lockSelect(sel, value, label){
+  if(!sel) return;
+  const v = (value ?? "");
+  const lab = (label ?? v ?? "");
+  sel.innerHTML = `<option value="${escapeHtml(String(v))}">${escapeHtml(String(lab || '—'))}</option>`;
+  sel.value = String(v);
+  sel.disabled = true;
+  sel.classList.add('locked');
+}
+
+
+// Entry type options (modal)
+function setEntryTypeOptions(){
+  const sel = document.getElementById('eType');
+  if(!sel) return;
+
+  // Keep values stable: these are what we store in Supabase
+  const opts = [
+    { v: 'AL',      label: 'A/L' },
+    { v: 'CL',      label: 'C/L' },
+    { v: 'NA',      label: 'N/A' },
+    { v: 'COURSE',  label: 'Course' },
+    { v: 'MEETING', label: 'Meeting' },
+    { v: 'OTHER',   label: 'Other' },
+  ];
+
+  const current = sel.value || 'AL';
+  sel.innerHTML = '';
+  for(const o of opts){
+    const opt = document.createElement('option');
+    opt.value = o.v;
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  }
+  // Restore selection if possible
+  sel.value = opts.some(x=>x.v===current) ? current : 'AL';
+  sel.disabled = false;
+  sel.classList.remove('locked');
+}
+
 const AUTH_KEY = "dc_lbb_auth_v1";
 const SESSION_AUTH_KEY = "dc_lbb_auth_session_v1";
 
@@ -1170,6 +1212,7 @@ const els = {
   entryModal: document.getElementById("entryModal"),
   btnCloseEntry: document.getElementById("btnCloseEntry"),
   entryTitle: document.getElementById("entryTitle"),
+  ePerson: document.getElementById("entryPerson"),
   eType: document.getElementById("eType"),
   eTeam: document.getElementById("eTeam"),
   eLink: document.getElementById("eLink"),
@@ -1699,14 +1742,19 @@ function openEntryModal(entryId){
 
   els.entryTitle.textContent = canEdit ? "Edit your entry" : "View entry";
   els.eType.value = e.type;
-  els.eTeam.value = e.team || "";
-  els.eLink.value = e.link;
+
+  // Identity fields are always locked (person/team/link)
+  lockSelect(els.ePerson, e.person || "", e.person || "");
+  lockSelect(els.eTeam, e.team || "", e.team || "");
+  lockSelect(els.eLink, e.link || "", e.link || "");
+
   els.eStart.value = e.start;
   els.eEnd.value = e.end;
   els.eNotes.value = e.notes || "";
 
-  [els.eType, els.eTeam, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=!canEdit);
-  els.eTeam.disabled = true;
+  // Only these are editable (and only for your own entries)
+  [els.eType, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=!canEdit);
+
   els.btnSaveEntry.style.display = canEdit ? "" : "none";
   els.btnDeleteEntry.style.display = canEdit ? "" : "none";
 
@@ -1723,13 +1771,21 @@ function openNewEntry(seedDateStr){
   if(!state.accessAuth){ openLogin(); return; }
   selectedEntryId=null;
   els.entryTitle.textContent = "New entry";
+
+  // Lock identity to the signed-in user
+  lockSelect(els.ePerson, state.accessAuth.staffId || "", state.accessAuth.name || "");
+  lockSelect(els.eTeam, state.accessAuth.team || "", state.accessAuth.team || "");
+  lockSelect(els.eLink, state.accessAuth.link || "", state.accessAuth.link || "");
+  setEntryTypeOptions();
+
+
   els.eType.value="AL";
-  els.eTeam.value = state.accessAuth.team || "";
-  els.eLink.value = state.accessAuth.link || "";
   const seed = seedDateStr || isoDate(state.today);
   els.eStart.value=seed; els.eEnd.value=seed; els.eNotes.value="";
-  [els.eType, els.eTeam, els.eLink, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=false);
-  els.eTeam.disabled = true;
+
+  // Only these are editable
+  [els.eType, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=false);
+
   els.btnSaveEntry.style.display="";
   els.btnDeleteEntry.style.display="none";
   updateAutoHint();
@@ -1769,17 +1825,17 @@ async function saveEntry(){
   if(!state.accessAuth) return;
 
   const type = els.eType.value;
-  const team = normaliseText(els.eTeam.value) || state.accessAuth.team || "";
-  const link = normaliseText(els.eLink.value) || state.accessAuth.link || "";
-  const start = els.eStart.value;
+  const team = state.accessAuth.team || "";
+  const link = state.accessAuth.link || "";
+  const staffId = state.accessAuth.staffId || "";
+  const staffName = state.accessAuth.name || "";
+const start = els.eStart.value;
   const end = els.eEnd.value;
   const notes = els.eNotes.value.trim();
 
   if(!start || !end){ alert("Pick start and end dates."); return; }
   if(end < start){ alert("End date cannot be before start date."); return; }
-  if(!link){ alert("Missing link (e.g. TRC/RCM/IC1)."); return; }
-
-  let status = "PENDING";
+let status = "PENDING";
   if(!selectedEntryId){
     status = computeStatusForNewEntry(state.accessAuth, {start, end, link, type});
   }else{
@@ -1813,7 +1869,7 @@ async function saveEntry(){
     const { data, error } = await supabase
       .from("calendar_entries")
       .insert({
-        staff_id: state.accessAuth.staffId,
+        staff_id: staffId,
         start_date: start,
         end_date: end,
         entry_type: type,
@@ -1993,6 +2049,7 @@ if(els.fltScope){
 (async function init(){
   els.modeLabel.textContent = "Supabase";
   if(!(await initSupabase())) return;
+  setEntryTypeOptions();
   await refreshAll();
 })();
 
