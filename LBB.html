@@ -1159,6 +1159,7 @@ const els = {
   fltPerson: document.getElementById("fltPerson"),
   listCount: document.getElementById("listCount"),
   listBody: document.getElementById("listBody"),
+  loginModal: document.getElementById("loginModal"),
 
   loginBack: document.getElementById("loginBack"),
   btnCloseLogin: document.getElementById("btnCloseLogin"),
@@ -1678,13 +1679,15 @@ function renderList(){
 
 // --- Modals ---
 function openLogin(){
-  els.accessCode.value="";
-  els.rememberMe.checked=false;
-  els.loginBack.style.display="flex";
-  setTimeout(()=>els.accessCode.focus(), 50);
+  if(!els.loginModal) return;
+  els.accessCode.value = "";
+  els.rememberMe.checked = false;
+  els.loginModal.style.display = "flex";
+  setTimeout(()=>els.accessCode?.focus(), 50);
 }
-function closeLogin(){ els.loginBack.style.display="none"; }
-
+function closeLogin(){
+  if(els.loginModal) els.loginModal.style.display = "none";
+}
 let selectedEntryId = null;
 
 function openEntryModal(entryId){
@@ -1951,12 +1954,19 @@ els.btnNext.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewM
 els.btnToday.addEventListener("click", ()=>{ const t=new Date(); t.setDate(1); t.setHours(0,0,0,0); state.viewMonth=t; refreshAll(); });
 
 els.btnLogin.addEventListener("click", openLogin);
+
+  if(els.loginModal){
+    els.loginModal.addEventListener("click", (e)=>{ if(e.target===els.loginModal) closeLogin(); });
+  }
 els.btnLogout.addEventListener("click", ()=>{ clearAccessAuth(); renderAuth(); refreshAll(); });
 els.btnNew.addEventListener("click", ()=> openNewEntry());
 
 els.btnCloseLogin.addEventListener("click", closeLogin);
 els.loginBack.addEventListener("click", (e)=>{ if(e.target===els.loginBack) closeLogin(); });
 els.btnDoLogin.addEventListener("click", doLogin);
+
+  if(els.loginBack) els.loginBack.addEventListener("click", closeLogin);
+  if(els.btnCloseLogin) els.btnCloseLogin.addEventListener("click", closeLogin);
 els.accessCode.addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
 
 els.btnCloseEntry.addEventListener("click", closeEntry);
