@@ -731,6 +731,52 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
 
 .titleRow{display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap}
 .cardTitle{font-weight:900; font-size:1.05rem}
+
+
+/* ===== Mobile UX: keep desktop perfect, make small screens sane ===== */
+.calScroll{ /* desktop: no effect */
+  overflow: visible;
+}
+@media (max-width: 860px){
+  header{padding: calc(.6rem + env(safe-area-inset-top)) .75rem .6rem;}
+  .headerInner{gap:.5rem}
+  .brand h1{font-size:1rem}
+  main{padding:.75rem}
+  .tabs{position:sticky; top:0; z-index:15; background:var(--bg); padding:.5rem 0}
+  .card{border-radius:16px}
+
+  /* Calendar becomes horizontally scrollable, not squashed */
+  .calScroll{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:6px;
+  }
+  #calendarGrid{
+    min-width: 980px; /* ensures 7 columns remain readable */
+  }
+
+  /* Make day cells a touch taller and clearer on mobile */
+  .dayCell{
+    min-height:160px;
+    padding:.6rem .65rem;
+  }
+  .dayNum{font-size:.95rem}
+
+  /* Event bubble stacks cleanly */
+  .eventChip{padding:.55rem .6rem}
+  .eventMeta b{font-size:.82rem}
+  .eventMeta small{font-size:.72rem}
+  .pillRow{gap:.3rem}
+
+  /* Tables and filter rows: always scroll instead of breaking layout */
+  .tableWrap{overflow:auto; -webkit-overflow-scrolling:touch;}
+  .table{min-width: 920px;}
+}
+@media (max-width: 520px){
+  main{padding:.6rem}
+  .dayCell{min-height:150px}
+  #calendarGrid{min-width: 920px;}
+}
 </style>
 </head>
 <body>
@@ -806,7 +852,7 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
           <div class="dow">
             <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
           </div>
-          <div id="calendarGrid"></div>
+          <div class="calScroll"><div id="calendarGrid"></div></div>
         </div>
       </div>
     </section>
