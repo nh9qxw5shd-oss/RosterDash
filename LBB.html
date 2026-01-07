@@ -4,701 +4,948 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Derby Control – Little Black Book</title>
-
   <style>
-    :root{
-      --bg:#f3f4f6;
-      --card:#ffffff;
-      --ink:#111827;
-      --muted:#6b7280;
-      --line:#e5e7eb;
-      --header:#111827;
-      --headerInk:#f9fafb;
-      --btn:#111827;
-      --btnInk:#f9fafb;
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e5e7eb;
+      --header: #0b1220;
+      --header2: #111827;
+      --chip: rgba(255,255,255,0.08);
+      --chipLine: rgba(255,255,255,0.14);
 
-      --ok:#16a34a;
-      --warn:#f59e0b;
-      --bad:#dc2626;
-      --info:#2563eb;
-    }
-
-    *{box-sizing:border-box}
-    body{
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background:var(--bg);
-      margin:0;
-      color:var(--ink);
+      /* Roster-matched colours */
+      --al: #dc2626;     /* A/L red */
+      --cl: #f97316;     /* C/L orange */
+      --na: #facc15;     /* N/A yellow */
+      --ok: #16a34a;     /* approved */
+      --warn: #f59e0b;   /* pending */
+      --bad: #ef4444;    /* rejected */
+      --sys: #0b0f1a;    /* system pill */
     }
 
-    header{
-      background:var(--header);
-      color:var(--headerInk);
-      /* iOS safe area so the header doesn't look like it's been guillotined */
-      padding: calc(.85rem + env(safe-area-inset-top)) 1.25rem .85rem;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:.75rem;
-      flex-wrap:wrap; /* allow wrap on mobile instead of cutting off */
-      position:sticky;
-      top:0;
-      z-index:10;
-    }
-    header h1{
-      font-size:1.05rem;
-      margin:0;
-      letter-spacing:.2px;
-      display:flex;
-      align-items:center;
-      gap:.6rem;
-      white-space:nowrap;
-    }
-    header .env{
-      font-size:.8rem;
-      opacity:.9;
-      display:flex;
-      align-items:center;
-      justify-content:flex-end;
-      gap:.5rem;
-      flex-wrap:wrap;
-      /* no nowrap: on mobile it was forcing overflow and looking "cut off" */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background: var(--bg);
+      color: var(--ink);
     }
 
-    /* Mobile header polish */
-    @media (max-width: 640px){
-      header{
-        padding: calc(.75rem + env(safe-area-inset-top)) 1rem .75rem;
-        align-items:stretch;
-      }
-      header h1{
-        white-space:normal;
-      }
-      header .env{
-        justify-content:flex-start;
-      }
-      header .env #btnBack{
-        width:100%;
-      }
+    /* ===== Header ===== */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: linear-gradient(180deg, var(--header), var(--header2));
+      color: #f8fafc;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .topbar-inner {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 12px 14px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .brand .tag {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(59,130,246,0.18);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: #e0f2fe;
+    }
+    .chips {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--chipLine);
+      color: #e5e7eb;
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #94a3b8;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 3px rgba(148,163,184,0.15);
+    }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+    .dot.off { background: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn.primary {
+      background: rgba(59,130,246,0.20);
+      border-color: rgba(59,130,246,0.28);
+    }
+    .btn.primary:hover { background: rgba(59,130,246,0.26); }
+
+    /* ===== Layout / Tabs ===== */
+    .wrap {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .tab[aria-selected="true"] {
+      border-color: rgba(59,130,246,0.35);
+      background: rgba(59,130,246,0.08);
     }
 
-    main{
-      padding:1.25rem;
-      max-width:1280px;
-      margin:0 auto;
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ===== Calendar Focus ===== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+    .cal-head {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .cal-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .iconbtn {
+      width: 36px;
+      height: 34px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .iconbtn:hover { background: #f8fafc; }
+    .cal-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 240px;
+    }
+    #monthTitle {
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kpis {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .kpi {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .kpi .dot {
+      width: 9px;
+      height: 9px;
+      box-shadow: none;
     }
 
-    .row{
-      display:flex;
-      gap:1rem;
-      flex-wrap:wrap;
-      align-items:stretch;
+    .calendar {
+      padding: 12px;
     }
-
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:1rem;
-      box-shadow:0 1px 2px rgba(0,0,0,.04);
-    }
-
-    .toolbar{
-      display:flex;
-      gap:.5rem;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
-    }
-
-    .left, .right{
-      display:flex;
-      gap:.5rem;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-
-    button, .btn{
-      background:var(--btn);
-      color:var(--btnInk);
-      border:1px solid rgba(255,255,255,.08);
-      border-radius:10px;
-      padding:.55rem .75rem;
-      cursor:pointer;
-      font-weight:600;
-      font-size:.9rem;
-    }
-    button.secondary{
-      background:#fff;
-      color:var(--ink);
-      border:1px solid var(--line);
-    }
-    button.ghost{
-      background:transparent;
-      color:var(--headerInk);
-      border:1px solid rgba(255,255,255,.18);
-    }
-    button:disabled{
-      opacity:.55;
-      cursor:not-allowed;
-    }
-
-    .pill{
-      display:inline-flex;
-      align-items:center;
-      gap:.4rem;
-      padding:.18rem .55rem;
-      border-radius:999px;
-      font-size:.78rem;
-      border:1px solid var(--line);
-      background:#fff;
-      color:var(--ink);
-      white-space:nowrap;
-    }
-    .pill .dot{
-      width:10px;height:10px;border-radius:999px;
-      background:var(--muted);
-    }
-    .dot.ok{background:var(--ok)}
-    .dot.warn{background:var(--warn)}
-    .dot.bad{background:var(--bad)}
-    .dot.info{background:var(--info)}
-
-    .gridWrap{
-      display:grid;
-      grid-template-columns: 1fr 380px;
-      gap:1rem;
-      align-items:start;
-    }
-    @media (max-width: 980px){
-      .gridWrap{grid-template-columns: 1fr}
-    }
-
-    .monthHeader{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:.75rem;
-      margin-bottom:.75rem;
-    }
-    .monthTitle{
-      font-size:1.05rem;
-      font-weight:800;
-    }
-    .subtle{
-      color:var(--muted);
-      font-size:.85rem;
-    }
-
-    .calendarGrid{
-      display:grid;
+    .dow {
+      display: grid;
       grid-template-columns: repeat(7, 1fr);
-      border:1px solid var(--line);
-      border-radius:12px;
-      overflow:hidden;
-      background:#fff;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 0 2px;
     }
-    .dow{
-      padding:.55rem .6rem;
-      background:#f9fafb;
-      border-bottom:1px solid var(--line);
-      font-size:.78rem;
-      font-weight:800;
-      color:#374151;
-      text-transform:uppercase;
-      letter-spacing:.6px;
+    .dow div {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
-    .dayCell{
-      min-height:105px;
-      border-right:1px solid var(--line);
-      border-bottom:1px solid var(--line);
-      padding:.55rem .6rem .6rem;
-      display:flex;
-      flex-direction:column;
-      gap:.35rem;
-      position:relative;
+    #calendarGrid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap:0;
+      align-items: stretch;
     }
-    .dayCell:nth-child(7n){border-right:none}
-    .dayNum{
-      font-weight:800;
-      font-size:.88rem;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:.4rem;
+    .day {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fff;
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    .dayNum .tiny{
-      font-weight:700;
-      font-size:.72rem;
-      color:var(--muted);
+    .day.outside {
+      background: #f9fafb;
+      color: #94a3b8;
     }
-    .isToday{
-      outline:2px solid rgba(37,99,235,.25);
-      outline-offset:-2px;
-      background:rgba(37,99,235,.03);
+    .day.today {
+      outline: 3px solid rgba(59,130,246,0.20);
+      border-color: rgba(59,130,246,0.35);
     }
-    .isOutside{
-      background:#fcfcfd;
-      color:#9ca3af;
+    .day-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 900;
+    }
+    .date-mini {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 900;
+    }
+    .sys-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--sys);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .entry {
+display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+    .entry .who {
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+    .entry .meta {
+min-width: 0;
+  flex: 1 1 160px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+    .pill {display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      line-height: 1;
+  flex:0 0 auto;
+}
+    .pill.type-al { background: var(--al); color: #fff; }
+    .pill.type-cl { background: var(--cl); color: #fff; }
+    .pill.type-na { background: var(--na); color: #111827; border-color: rgba(0,0,0,0.08); }
+
+    .pill.status-ok { background: rgba(22,163,74,0.10); color: #065f46; border-color: rgba(22,163,74,0.18); }
+    .pill.status-warn { background: rgba(245,158,11,0.10); color: #92400e; border-color: rgba(245,158,11,0.18); }
+    .pill.status-bad { background: rgba(239,68,68,0.10); color: #991b1b; border-color: rgba(239,68,68,0.18); }
+
+    .right-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
 
-    .eventChip{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:.45rem;
-      padding:.32rem .45rem;
-      border-radius:10px;
-      border:1px solid var(--line);
-      font-size:.78rem;
-      background:#fff;
-      cursor:pointer;
+    /* ===== List tab ===== */
+    .list-wrap {
+      display: grid;
+      gap: 12px;
     }
-    .eventChip .meta{
-      display:flex; flex-direction:column; gap:.15rem;
-      min-width:0;
+    .filters {
+      padding: 12px;
     }
-    .eventChip .meta b{
-      font-size:.78rem;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width: 240px;
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 12px;
     }
-    .eventChip .meta span{
-      color:var(--muted);
-      font-size:.72rem;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width: 240px;
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--muted);
+      margin-bottom: 6px;
     }
-    .tag{
-      font-size:.72rem;
-      padding:.12rem .4rem;
-      border-radius:999px;
-      border:1px solid var(--line);
-      white-space:nowrap;
+    select, input[type="text"] {
+      width: 100%;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 13px;
     }
-    .pillRow{display:flex; gap:.35rem; align-items:center; flex-wrap:wrap;}
+    .table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+    .table th {
+      background: #f8fafc;
+      text-align: left;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .table td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      vertical-align: top;
+    }
+    .table tr:last-child td { border-bottom: none; }
+    .muted { color: var(--muted); }
 
-    .tag.ok{border-color:rgba(22,163,74,.35); background:rgba(22,163,74,.07); color:#166534}
-    .tag.warn{border-color:rgba(245,158,11,.35); background:rgba(245,158,11,.08); color:#92400e}
-    .tag.bad{border-color:rgba(220,38,38,.35); background:rgba(220,38,38,.07); color:#991b1b}
-    .tag.info{border-color:rgba(37,99,235,.35); background:rgba(37,99,235,.07); color:#1d4ed8}
-
-    label{font-size:.85rem; font-weight:700}
-    input, select, textarea{
-      width:100%;
-      padding:.55rem .6rem;
-      border-radius:10px;
-      border:1px solid var(--line);
-      font:inherit;
-      background:#fff;
+    /* ===== Modals ===== */
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.5);
+      z-index: 100;
     }
-    textarea{min-height:80px; resize:vertical}
-
-    .formRow{
-      display:grid;
+    .modal.show { display: flex; }
+    .modal-card {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 60px rgba(15, 23, 42, 0.25);
+      overflow: hidden;
+    }
+    .modal-head {
+      padding: 12px 14px;
+      background: #0b1220;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .modal-head h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.2px;
+    }
+    .modal-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+    .row {
+      display: grid;
       grid-template-columns: 1fr 1fr;
-      gap:.65rem;
+      gap: 10px;
     }
-    .formRow3{
-      display:grid;
+    .row3 {
+      display: grid;
       grid-template-columns: 1fr 1fr 1fr;
-      gap:.65rem;
+      gap: 10px;
     }
-    @media (max-width: 980px){
-      .formRow, .formRow3{grid-template-columns: 1fr}
+    .actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      padding-top: 6px;
     }
-
-    .divider{
-      height:1px;
-      background:var(--line);
-      margin:.9rem 0;
+    .btn2 {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
     }
-
-    .hint{
-      font-size:.82rem;
-      color:var(--muted);
-      line-height:1.35;
+    .btn2.primary {
+      background: rgba(59,130,246,0.12);
+      border-color: rgba(59,130,246,0.25);
     }
-
-    .kpi{
-      display:flex;
-      flex-wrap:wrap;
-      gap:.5rem;
-      margin-top:.5rem;
-    }
-
-    .modalBack{
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.55);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding:1rem;
-      z-index:50;
-    }
-    .modal{
-      width:min(560px, 100%);
-      background:#fff;
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:1rem;
-      box-shadow:0 10px 35px rgba(0,0,0,.2);
-    }
-    .modalHeader{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:.75rem;
-      margin-bottom:.5rem;
-    }
-    .modalHeader b{font-size:1rem}
-    .modalActions{
-      display:flex;
-      gap:.5rem;
-      justify-content:flex-end;
-      flex-wrap:wrap;
-      margin-top:.75rem;
+    .btn2.danger {
+      background: rgba(239,68,68,0.10);
+      border-color: rgba(239,68,68,0.20);
+      color: #991b1b;
     }
 
-    .checkbox{
-      display:flex;
-      align-items:center;
-      gap:.55rem;
-      font-size:.9rem;
-      color:var(--ink);
-      user-select:none;
+    /* ===== Responsive ===== */
+    @media (max-width: 1100px) {
+      .grid4 { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
     }
-    .checkbox input{
-      width:18px; height:18px;
-      margin:0;
-    }
-
-    .table{
-      width:100%;
-      border-collapse:separate;
-      border-spacing:0;
-      font-size:.86rem;
-      overflow:hidden;
-      border:1px solid var(--line);
-      border-radius:12px;
-      background:#fff;
-    }
-    .table th, .table td{
-      padding:.55rem .6rem;
-      border-bottom:1px solid var(--line);
-      text-align:left;
-      vertical-align:top;
-    }
-    .table th{
-      background:#f9fafb;
-      font-size:.78rem;
-      letter-spacing:.5px;
-      text-transform:uppercase;
-      color:#374151;
-    }
-    .table tr:last-child td{border-bottom:none}
-
-    .tinyBtn{
-      padding:.28rem .5rem;
-      border-radius:10px;
-      font-size:.78rem;
+    @media (max-width: 720px) {
+      .topbar-inner { justify-content: center; }
+      .chips { justify-content: center; }
+      .dow { display: none; } /* saves space on mobile; day cards already show dates */
+      #calendarGrid { grid-template-columns: 1fr; }
+      .day { min-height: auto; }
+      .row, .row3 { grid-template-columns: 1fr; }
+      .grid4 { grid-template-columns: 1fr; }
+      .entry .meta { max-width: 100%; }
     }
 
-    .muted{color:var(--muted)}
-    .rightAlign{text-align:right}
+    /* legacy error strip ids */
+    #statusBar { display:none; }
   
-    .systemChip{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:.5rem;
-      background:#111827;
-      color:#f9fafb;
-      border-radius:12px;
-      padding:.22rem .55rem;
-      font-size:.74rem;
-      line-height:1.1;
-      margin:.25rem .35rem 0 .35rem;
-      user-select:none;
-      cursor:default;
-    }
-    .systemChip .muted{opacity:.85;font-weight:600}
-    
-    /* === Roster-aligned leave colours === */
 
-/* Annual Leave (A/L) */
-.tag.al {
-  background:#dc2626;   /* roster red */
-  color:#ffffff;
-  border-color:#dc2626;
+/* ===== Calendar visual polish (grid + chips) ===== */
+.calendar{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:12px;
+}
+.dow{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:0;
+  margin:0 0 8px 0;
+  color:var(--muted);
+  font-weight:900;
+  font-size:12px;
+}
+.dow > div{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+}
+#calendarGrid{
+  gap:0;
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+}
+.day{
+  border:0;
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  border-radius:0;
+  padding:10px;
+  min-height:150px;
+  background:#fff;
+}
+.day:nth-child(7n){
+  border-right:0;
+}
+.day.outside{
+  background:#f8fafc;
+  color:#94a3b8;
+}
+.day.today{
+  outline:2px solid rgba(59,130,246,.35);
+  outline-offset:-2px;
+  background:rgba(59,130,246,.03);
+}
+.dayNum{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:6px;
+}
+.dayNum span:first-child{
+  font-weight:900;
+  font-size:13px;
+  color:var(--ink);
+}
+.dayNum .wday{
+  font-weight:900;
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.systemChip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:#0b1220;
+  color:#fff;
+  font-size:11px;
+  font-weight:800;
+  width:fit-content;
+}
+.systemChip .muted{
+  color:rgba(255,255,255,.72);
+  font-weight:900;
+}
+.eventChip{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  gap:6px;
+  padding:8px 10px;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 1px 0 rgba(17,24,39,.04);
+  min-width:0;
 }
 
-/* Compensation Leave (C/L) */
-.tag.cl {
-  background:#f97316;   /* roster orange */
-  color:#ffffff;
-  border-color:#f97316;
+.eventChip .meta{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.eventChip .meta b{
+  font-size:13px;
+  line-height:1.1;
+}
+.eventChip .meta span{
+  font-size:11px;
+  color:var(--muted);
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+.eventChip .pillRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+  justify-content:flex-start;
+  width:100%;
+  min-width:0;
 }
 
-/* N/A */
-.tag.na {
-  background:#fde047;   /* roster yellow */
-  color:#000000;
-  border-color:#fde047;
+.tag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid transparent;
+  font-size:11px;
+  font-weight:900;
+  line-height:1;
+  white-space:nowrap;
 }
-  </style>
+
+/* Leave type colours (match roster vibe) */
+.tag.al{ background:#dc2626; border-color:#b91c1c; color:#fff; } /* red */
+.tag.cl{ background:#f97316; border-color:#ea580c; color:#fff; } /* orange */
+.tag.na{ background:#facc15; border-color:#eab308; color:#111827; } /* yellow */
+.tag.info{ background:#e5e7eb; border-color:#d1d5db; color:#111827; }
+
+/* Status */
+.tag.ok{ background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35); color:#166534; }
+.tag.warn{ background:rgba(245,158,11,.14); border-color:rgba(245,158,11,.35); color:#92400e; }
+.tag.bad{ background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.35); color:#991b1b; }
+
+/* Keep calendar readable at smaller widths */
+@media (max-width: 980px){
+  .calendar{ padding:10px; }
+  #calendarGrid{ overflow-x:auto; display:block; }
+  .dow{ display:none; }
+  #calendarGrid{ border-radius:14px; }
+  #calendarGrid{
+  display:grid;
+  grid-template-columns:repeat(7, 1fr);
+  gap:10px;
+  align-items:stretch;
+  padding:10px;
+}
+
+}
+
+
+/* ===== Fix: ensure calendar grid is 7-column ===== */
+#calendarGrid{
+  display:grid;
+  grid-template-columns:repeat(7, 1fr);
+  gap:0;
+}
+#calendarGrid{
+  overflow:hidden;
+}
+
+
+/* ===== Calendar cell clarity patch ===== */
+#calendarGrid{
+  gap: 12px;
+  padding: 12px;
+}
+#calendarGrid .dayCell{
+  border: 1px solid rgba(17,24,39,.14);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px;
+  min-height: 150px;
+  box-shadow: 0 1px 2px rgba(17,24,39,.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#calendarGrid .dayCell.otherMonth{
+  background: #f9fafb;
+  opacity: .85;
+}
+#calendarGrid .dayNum{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(17,24,39,.10);
+}
+#calendarGrid .dayNum .d{
+  font-weight: 800;
+}
+#calendarGrid .dayNum .dow{
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+#calendarGrid .dayNum span:first-child{font-weight:800;}
+#calendarGrid .dayNum .tiny{
+  font-size:12px;
+  color:#6b7280;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+#calendarGrid .dayCell.isOutside{background:#f9fafb; opacity:.85;}
+
+
+/* ==== Calendar fit + readability overrides (v5.1) ==== */
+#calendarGrid{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:12px!important;padding:12px!important;box-sizing:border-box;min-width:0;}
+.dayCell{min-width:0;overflow:hidden;}
+.entryCard{min-width:0;}
+.entryMeta{min-width:0;}
+.calendar{overflow-x:auto;}
+.wrap{max-width:calc(100vw - 24px)!important;}
+</style>
 </head>
-
 <body>
-  <header>
-    <h1>📓 Little Black Book <span class="pill"><span class="dot info"></span><span id="modeLabel">Supabase</span></span></h1>
-    <div class="env">
-      <button class="ghost" id="btnBack">← Back to Roster</button>
-      <span class="pill"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></span>
-      <span class="pill"><span class="dot info"></span><span id="whoAmI">Not signed in</span></span>
+
+  <!-- legacy error handler strip -->
+  <div id="errBar" style="display:none;"></div>
+  <div id="errText" style="display:none;"></div>
+
+  <div id="statusBar"></div>
+  <div id="statusText"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span>📓 Little Black Book</span>
+        <span class="tag">Supabase</span>
+      </div>
+
+      <div class="chips">
+        <a id="btnBack" class="btn" href="https://nh9qxw5shd-oss.github.io/RosterDash">← Back to Roster</a>
+
+        <span class="chip">
+          <span id="connDot" class="dot off"></span>
+          <span id="connText">Not connected</span><span id="modeLabel" style="display:none;">Not connected</span>
+        </span>
+
+        <span class="chip">
+          <span class="dot ok" style="background:#3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.18);"></span>
+          <span id="whoAmI">Not signed in</span>
+        </span>
+
+        <button id="btnLogin" class="btn">Sign in</button>
+        <button id="btnNew" class="btn primary">+ New entry</button>
+        <button id="btnLogout" class="btn" style="display:none;">Sign out</button>
+      </div>
     </div>
   </header>
 
-  <div id="errBar" style="display:none; max-width:1280px; margin:0 auto; padding: .75rem 1.25rem;">
-    <div class="card" style="border-left:6px solid var(--bad);">
-      <b style="display:block; margin-bottom:.25rem;">Something failed to load</b>
-      <div class="hint" id="errText" style="color:#7f1d1d;"></div>
-      <div class="hint" style="margin-top:.35rem;">Tip: open your browser console (F12) for the full error.</div>
+  <main class="wrap">
+    <div class="tabs">
+      <button id="tabCalendar" class="tab" aria-selected="true">Calendar</button>
+      <button id="tabList" class="tab" aria-selected="false">List view</button>
     </div>
-  </div>
 
-
-  <main>
-  <div id="statusBar" style="display:none;background:#fff3cd;color:#7c2d12;border:1px solid #f59e0b;padding:.75rem 1rem;border-radius:.75rem;margin-bottom:1rem;">
-    <strong>Little Black Book diagnostic:</strong>
-    <div id="statusText" style="margin-top:.25rem;white-space:pre-wrap;font-family:ui-monospace, SFMono-Regular, Menlo, monospace;font-size:.85rem;"></div>
-  </div>
-
-    <div class="row">
-      <div class="card" style="flex:1 1 680px;">
-        <div class="toolbar">
-          <div class="left">
-            <button class="secondary" id="btnPrev">◀</button>
-            <button class="secondary" id="btnToday">Today</button>
-            <button class="secondary" id="btnNext">▶</button>
-            <span class="pill"><span class="dot info"></span><span id="windowLabel">12‑month window</span></span>
+    <!-- ===== Calendar panel ===== -->
+    <section id="panelCalendar" class="panel active">
+      <div class="card">
+        <div class="cal-head">
+          <div class="cal-controls">
+            <button id="btnPrev" class="iconbtn" title="Previous month">‹</button>
+            <button id="btnToday" class="btn2" title="Jump to today">Today</button>
+            <button id="btnNext" class="iconbtn" title="Next month">›</button>
+            <span class="chip" style="background:#fff; color:var(--ink); border-color:var(--line);">
+              <span class="dot ok" style="background:#3b82f6; box-shadow:none;"></span>
+              <span id="windowLabel">12-month window</span>
+            </span>
           </div>
-          <div class="right">
-            <button id="btnLogin" onclick="lbbOpenLogin();return false;" class="secondary">Sign in</button>
-            <button id="btnLogout" class="secondary" style="display:none;">Sign out</button>
-            <button id="btnNew" disabled>+ New entry</button>
+
+          <div class="cal-title">
+            <div id="monthTitle">Month</div>
+            <div class="subtle">Visibility: everyone (edit: your own only)</div>
+          </div>
+
+          <div class="kpis">
+            <span class="kpi"><span class="dot" style="background:var(--ok)"></span><span id="kpiApproved">Approved: 0</span></span>
+            <span class="kpi"><span class="dot" style="background:var(--warn)"></span><span id="kpiPending">Pending: 0</span></span>
+            <span class="kpi"><span class="dot" style="background:var(--bad)"></span><span id="kpiRejected">Rejected: 0</span></span>
           </div>
         </div>
 
-        <div class="divider"></div>
+        <div class="calendar">
+          <div class="dow">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div id="calendarGrid"></div>
+        </div>
+      </div>
+    </section>
 
-        <div class="gridWrap">
-          <div>
-            <div class="monthHeader">
-              <div>
-                <div class="monthTitle" id="monthTitle">Month</div>
-                <div class="subtle" id="monthSub">Visibility: everyone (edit: your own only)</div>
-              </div>
-              <div class="kpi">
-                <span class="pill"><span class="dot ok"></span><span id="kpiApproved">Approved: 0</span></span>
-                <span class="pill"><span class="dot warn"></span><span id="kpiPending">Pending: 0</span></span>
-                <span class="pill"><span class="dot bad"></span><span id="kpiRejected">Rejected: 0</span></span>
-              </div>
+    <!-- ===== List panel ===== -->
+    <section id="panelList" class="panel">
+      <div class="list-wrap">
+        <div class="card filters">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="font-weight:900;">Entries (list view)</div>
+            <div class="chip" style="background:#fff; color:var(--ink); border-color:var(--line);">
+              <span class="dot ok" style="background:#3b82f6; box-shadow:none;"></span>
+              <span id="listCount">0 shown</span>
             </div>
-
-            <div class="calendarGrid" id="calendarGrid"></div>
           </div>
 
-          <div class="card">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:.75rem;">
-              <b>Entries (list view)</b>
-              <span class="pill"><span class="dot info"></span><span id="listCount">0 shown</span></span>
+          <div class="grid4" style="margin-top:12px;">
+            <div class="field">
+              <label for="fltLink">Filter: Link</label>
+              <select id="fltLink"></select>
             </div>
-
-            <div class="divider"></div>
-
-            <div class="formRow">
-              <div>
-                <label>Filter: Link</label>
-                <select id="fltLink">
-                  <option value="">All links</option>
-                </select>
-              </div>
-              <div>
-                <label>Filter: Type</label>
-                <select id="fltType">
-                  <option value="">All types</option>
-                  <option value="AL">A/L</option>
-                  <option value="CL">C/L</option>
-                  <option value="NA">N/A</option>
-                  <option value="COURSE">Course</option>
-                  <option value="MEETING">Meeting</option>
-                  <option value="APPOINTMENT">Appointment</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
+            <div class="field">
+              <label for="fltType">Filter: Type</label>
+              <select id="fltType"></select>
             </div>
-
-            <div class="formRow" style="margin-top:.65rem;">
-              <div>
-                <label>Filter: Status</label>
-                <select id="fltStatus">
-                  <option value="">All statuses</option>
-                  <option value="AUTO_APPROVED">Auto‑approved</option>
-                  <option value="PENDING">Pending</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </select>
-              </div>
-              <div>
-                <label>Filter: Person</label>
-                <select id="fltPerson">
-                  <option value="">All people</option>
-                </select>
-              </div>
+            <div class="field">
+              <label for="fltStatus">Filter: Status</label>
+              <select id="fltStatus"></select>
             </div>
-
-
-            <div class="formRow" style="margin-top:.65rem;">
-              <div>
-                <label>Filter scope</label>
-                <select id="fltScope">
-                  <option value="view">This view</option>
-                  <option value="year">Whole year</option>
-                </select>
-              </div>
-              <div></div>
+            <div class="field">
+              <label for="fltPerson">Filter: Person</label>
+              <select id="fltPerson"></select>
             </div>
-
-            <div class="divider"></div>
-
-            <div style="max-height: 440px; overflow:auto;">
-              <table class="table" id="listTable">
-                <thead>
-                  <tr>
-                    <th>Date(s)</th>
-                    <th>Person</th>
-                    <th>Team</th>
-                    <th>Link</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th class="rightAlign">Edit</th>
-                  </tr>
-                </thead>
-                <tbody id="listBody"></tbody>
-              </table>
-            </div>
-
-            <div class="divider"></div>
-            <div class="hint">
-              Auto‑approval rule (first pass): if the request is within the next <b>12 months</b> and you’re the
-              <b>first person in your link</b> requesting that date, it’s <b>auto‑approved</b>.
-              Second+ in the same link/day becomes <b>pending</b> for roster/RCM/SNDM/HoC approval. (Link = roster link group, not team.)
+            <div class="field" style="grid-column:1 / -1; max-width:260px;">
+              <label for="fltScope">Filter scope</label>
+              <select id="fltScope"></select>
             </div>
           </div>
         </div>
-      </div>
 
+        <div class="card" style="padding:12px;">
+          <table class="table">
+            <thead>
+            <tr>
+              <th style="width:170px;">Date(s)</th>
+              <th>Person</th>
+              <th style="width:110px;">Team</th>
+              <th style="width:120px;">Link</th>
+              <th style="width:110px;">Type</th>
+              <th style="width:140px;">Status</th>
+              <th style="width:90px;">Edit</th>
+            </tr>
+          </thead>
+            <tbody id="listBody"></tbody>
+          </table>
+
+          <div class="subtle" style="margin-top:10px;">
+            Auto-approval rule (first pass): if the request is within the next <b>12 months</b> and you’re the <b>first person in your link</b> requesting that date, it’s <b>auto-approved</b>. Second+ in the same link/day becomes <b>pending</b> for roster/RCM/SNDM/HoC approval.
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
   </main>
 
-  <div class="modalBack" id="loginBack">
-    <div class="modal">
-      <div class="modalHeader">
-        <b>Sign in (5‑char access code)</b>
-        <button class="secondary tinyBtn" id="btnCloseLogin" onclick="lbbCloseLogin();return false;">Close</button>
+  <!-- ===== Login modal ===== -->
+  <div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-label="Sign in">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Sign in</h3>
+        <button id="btnCloseLogin" class="btn" type="button">✕</button>
       </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="accessCode">5‑character access code</label>
+          <input id="accessCode" type="text" inputmode="text" maxlength="5" autocomplete="off" placeholder="ABCDE" />
+          <div id="autoHint" class="subtle" style="margin-top:6px;"></div>
+        </div>
+        <label class="chip" style="background:#fff; color:var(--ink); border-color:var(--line); justify-content:flex-start;">
+          <input id="rememberMe" type="checkbox" style="margin:0 8px 0 0;" />
+          Remember me on this device
+        </label>
 
-      <div class="hint" style="margin-bottom:.75rem;">
-        No emails. No passwords. No “I forgot it” tickets.
-      </div>
-
-      <label>Access code</label>
-      <input id="accessCode" placeholder="ABCDE" maxlength="5" autocomplete="off" />
-
-      <div style="height:.65rem"></div>
-
-      <label class="checkbox">
-        <input type="checkbox" id="rememberMe" />
-        Remember me on this device
-      </label>
-
-      <div class="modalActions">
-        <button id="btnDoLogin">Sign in</button>
-      </div>
-
-      <div class="divider"></div>
-      <div class="hint">
-        Shared desk PC? Leave “Remember me” unticked so it signs you out when the tab closes.
+        <div class="actions">
+          <button id="entryBack" class="btn2" type="button" style="display:none;">Back</button>
+          <button id="loginBack" class="btn2" type="button">Cancel</button>
+          <button id="btnDoLogin" class="btn2 primary" type="button">Sign in</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="modalBack" id="entryBack">
-    <div class="modal">
-      <div class="modalHeader">
-        <b id="entryTitle">New entry</b>
-        <button class="secondary tinyBtn" id="btnCloseEntry">Close</button>
+  <!-- ===== Entry modal ===== -->
+  <div id="entryModal" class="modal" role="dialog" aria-modal="true" aria-label="Entry">
+    <div class="modal-card" style="width:min(760px, 100%);">
+      <div class="modal-head">
+        <h3 id="entryTitle">New entry</h3>
+        <button id="btnCloseEntry" class="btn" type="button">✕</button>
       </div>
-
-            <div class="formRow3">
-        <div>
-          <label>Type</label>
-          <select id="eType">
-            <option value="AL">A/L</option>
-            <option value="CL">C/L</option>
-            <option value="NA">N/A</option>
-            <option value="COURSE">Course</option>
-            <option value="MEETING">Meeting</option>
-            <option value="APPOINTMENT">Appointment</option>
-            <option value="OTHER">Other</option>
-          </select>
+      <div class="modal-body">
+        <div class="row3">
+          <div class="field">
+            <label for="entryPerson">Person</label>
+            <select id="entryPerson"></select>
+          </div>
+          <div class="field">
+            <label for="eTeam">Team</label>
+            <select id="eTeam"></select>
+          </div>
+          <div class="field">
+            <label for="entryLink">Link</label>
+            <select id="eLink"></select>
+          </div>
+          <div class="field">
+            <label for="entryType">Type</label>
+            <select id="eType"></select>
+          </div>
         </div>
-        <div>
-          <label>Team</label>
-          <input id="eTeam" placeholder="Auto-filled from your profile" disabled />
+
+        <div class="row">
+          <div class="field">
+            <label for="entryStart">Start date</label>
+            <input id="eStart" type="date" />
+          </div>
+          <div class="field">
+            <label for="entryEnd">End date</label>
+            <input id="eEnd" type="date" />
+          </div>
         </div>
-        <div>
-          <label>Link</label>
-          <input id="eLink" placeholder="Auto-filled from your profile" />
+
+        <div class="field">
+          <label for="entryNotes">Notes (optional)</label>
+          <input id="eNotes" type="text" placeholder="Optional notes..." />
         </div>
-      </div>
 
-      <div class="formRow" style="margin-top:.65rem;">
-        <div>
-          <label>Start date</label>
-          <input id="eStart" type="date" />
+        <div class="actions">
+          <button id="entryBack" class="btn2" type="button" style="display:none;">Back</button>
+          <button id="btnDeleteEntry" class="btn2 danger" type="button" style="margin-right:auto; display:none;">Delete</button>
+          <button id="btnSaveEntry" class="btn2 primary" type="button">Save</button>
         </div>
-        <div>
-          <label>End date</label>
-          <input id="eEnd" type="date" />
-        </div>
-      </div>
-
-      <div style="margin-top:.65rem;">
-        <label>Notes (optional)</label>
-        <textarea id="eNotes" placeholder="e.g. AM only, hospital appt, course name, etc"></textarea>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="hint" id="autoHint">Auto‑approval check will run on save.</div>
-
-      <div class="modalActions">
-        <button class="secondary" id="btnDeleteEntry" style="display:none;">Cancel</button>
-        <button id="btnSaveEntry">Save</button>
       </div>
     </div>
   </div>
 
-<script>
-(function(){
+  <script>
+  (function(){
   const sb = () => document.getElementById('statusBar');
   const st = () => document.getElementById('statusText');
   function show(msg){
@@ -730,10 +977,10 @@
     return '';
   };
 })();
-</script>
+  </script>
 
-<script type="module">
-/* ==========================================================
+  <script type="module">
+  /* ==========================================================
    Derby Control – Little Black Book (Calendar bolt‑on)
    - Supabase-backed (no local demo mode)
    - Personal login via 5‑char access code (staff_directory.access_code)
@@ -895,6 +1142,7 @@ const els = {
   windowLabel: document.getElementById("windowLabel"),
 
   calendarGrid: document.getElementById("calendarGrid"),
+      calendarGridWrap: document.getElementById("calendarGrid"),
 
   btnLogin: document.getElementById("btnLogin"),
   btnLogout: document.getElementById("btnLogout"),
@@ -1223,9 +1471,16 @@ function autoLikelihood(person, start, end, type){
 // --- Rendering ---
 function buildDOW(){
   const dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  els.calendarGrid.innerHTML="";
-  dows.forEach(d=>{ const div=document.createElement("div"); div.className="dow"; div.textContent=d; els.calendarGrid.appendChild(div); });
+  const dowEl = document.querySelector(".dow");
+  if(!dowEl) return;
+  dowEl.innerHTML = "";
+  dows.forEach(d=>{
+    const div=document.createElement("div");
+    div.textContent=d;
+    dowEl.appendChild(div);
+  });
 }
+
 
 function renderMonth(){
   const d = new Date(state.viewMonth); d.setDate(1);
@@ -1242,6 +1497,8 @@ function renderMonth(){
   els.kpiRejected.textContent = `Rejected: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="REJECTED").length}`;
 
   buildDOW();
+  // Clear previous month grid (prevents stacking)
+  if(els.calendarGrid) els.calendarGrid.innerHTML = "";
 
   const first = new Date(y,m,1);
   const firstDow = first.getDay();
@@ -1304,17 +1561,45 @@ function renderMonth(){
 
 
 function populateFilters(){
-  const src = (els.fltScope && els.fltScope.value==="year") ? (state.entriesYear||[]) : (state.entriesMonth||[]);
-  const links = Array.from(new Set([...state.people.map(p=>p.link).filter(Boolean), ...src.map(e=>e.link).filter(Boolean)])).sort();
-  const keep = els.fltLink.value;
-  els.fltLink.innerHTML = `<option value="">All links</option>` + links.map(l=>`<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
-  els.fltLink.value = links.includes(keep) ? keep : "";
+  // Link options (actual link group)
+  const links=[...new Set((state.entriesYear.length?state.entriesYear:state.entriesMonth).map(e=>e.link).filter(Boolean))].sort();
+  els.fltLink.innerHTML = `<option value="">All links</option>` + links.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
 
-  const people = state.people.slice().sort((a,b)=>a.name.localeCompare(b.name));
-  const keepP = els.fltPerson.value;
-  els.fltPerson.innerHTML = `<option value="">All people</option>` + people.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("");
-  els.fltPerson.value = people.some(p=>p.id===keepP) ? keepP : "";
+  
+// Person options
+const src = (state.entriesYear && state.entriesYear.length) ? state.entriesYear : state.entriesMonth;
+const peopleMap = new Map();
+(src || []).forEach(e=>{
+  const id = e.staffId || e.personId || "";
+  const name = e.personName || e.person || e.staffName || "";
+  if(!id && !name) return;
+  const key = id || name;
+  if(!peopleMap.has(key)) peopleMap.set(key, { id: key, name: name || key });
+});
+const people = Array.from(peopleMap.values()).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+els.fltPerson.innerHTML = `<option value="">All people</option>` + people.map(p=>`<option value="${escapeHtml(String(p.id))}">${escapeHtml(String(p.name))}</option>`).join("");
+  // Type options (leave type)
+  const types=[...new Set((state.entriesYear.length?state.entriesYear:state.entriesMonth).map(e=>e.type).filter(Boolean))].sort();
+  els.fltType.innerHTML = `<option value="">All types</option>` + types.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(entryTypeLabel(x))}</option>`).join("");
+
+  // Status options
+  const statuses=[...new Set((state.entriesYear.length?state.entriesYear:state.entriesMonth).map(e=>e.status).filter(Boolean))].sort();
+  const prettyStatus = (s)=>{
+    const k=String(s||"").toLowerCase();
+    if(k==="approved") return "Approved";
+    if(k==="pending") return "Pending";
+    if(k==="rejected") return "Rejected";
+    if(k==="auto") return "Auto";
+    return String(s||"");
+  };
+  els.fltStatus.innerHTML = `<option value="">All statuses</option>` + statuses.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(prettyStatus(x))}</option>`).join("");
+
+  // Scope options (preserve selection)
+  const prevScope = els.fltScope.value || "view";
+  els.fltScope.innerHTML = `<option value="view">This view</option><option value="year">Whole year</option>`;
+  els.fltScope.value = prevScope;
 }
+
 
 function renderTypeStatusPills(e){
   const typeLbl = entryTypeLabel(e.type);
@@ -1700,41 +1985,28 @@ if(els.fltScope){
   if(!(await initSupabase())) return;
   await refreshAll();
 })();
-</script>
 
-<!--
-SUPABASE TABLES (optional) – paste into Supabase SQL editor
+  // ===== Tabs (UI only; does not touch business logic) =====
+  const tabCalendar = document.getElementById('tabCalendar');
+  const tabList = document.getElementById('tabList');
+  const panelCalendar = document.getElementById('panelCalendar');
+  const panelList = document.getElementById('panelList');
 
-create table if not exists public.cal_people (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  link text not null,
-  code text not null check (length(code)=5),
-  created_at timestamptz not null default now()
-);
-create unique index if not exists cal_people_code_uidx on public.cal_people (code);
+  function setTab(which) {
+    const cal = which === 'cal';
+    tabCalendar.setAttribute('aria-selected', cal ? 'true' : 'false');
+    tabList.setAttribute('aria-selected', cal ? 'false' : 'true');
+    panelCalendar.classList.toggle('active', cal);
+    panelList.classList.toggle('active', !cal);
+    // Keep scroll position sane
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
 
-create table if not exists public.cal_entries (
-  id uuid primary key,
-  person_id uuid not null references public.cal_people(id) on delete cascade,
-  person_name text not null,
-  link text not null,
-  type text not null,
-  start date not null,
-  "end" date not null,
-  notes text null,
-  status text not null default 'pending',
-  code text not null check (length(code)=5),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists cal_entries_start_idx on public.cal_entries(start);
-create index if not exists cal_entries_link_idx on public.cal_entries(link);
+  tabCalendar?.addEventListener('click', () => setTab('cal'));
+  tabList?.addEventListener('click', () => setTab('list'));
 
-FIRST PASS SECURITY NOTE:
-This version is "good enough for a controllers diary" (your words, not mine).
-Edits require knowing the 5-char code, reads are open to anyone with the anon key.
-When you want to harden it, we move writes into a SECURITY DEFINER RPC and lock down direct writes with RLS.
--->
+  // If user clicks a “List” edit action (if present), ensure list tab is visible.
+  window.__LBB_setTab = setTab;
+  </script>
 </body>
 </html>
