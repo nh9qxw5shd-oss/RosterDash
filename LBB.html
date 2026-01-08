@@ -777,6 +777,26 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
   .dayCell{min-height:150px}
   #calendarGrid{min-width: 920px;}
 }
+
+/* ===== My View toggle ===== */
+.btn2.toggle-on{
+  background: rgba(59,130,246,0.12);
+  border-color: rgba(59,130,246,0.25);
+}
+
+
+/* ===== Private View ===== */
+.btn2.toggle-private{
+  background: rgba(168,85,247,0.12);
+  border-color: rgba(168,85,247,0.25);
+}
+.tag.private{
+  background: rgba(168,85,247,0.14);
+  border-color: rgba(168,85,247,0.35);
+  color: #6b21a8;
+}
+.hidden{display:none !important;}
+
 </style>
 </head>
 <body>
@@ -834,6 +854,8 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
               <span class="dot ok" style="background:#3b82f6; box-shadow:none;"></span>
               <span id="windowLabel">12-month window</span>
             </span>
+            <button id="btnMyView" class="btn2" type="button" title="Show only your entries on the calendar" disabled>My View: Off</button>
+            <button id="btnPrivateView" class="btn2" type="button" title="Private calendar (UI-only privacy)" disabled>Private: Off</button>
           </div>
 
           <div class="cal-title">
@@ -1020,7 +1042,13 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
           </div>
         </div>
 
-        <div class="field">
+        
+        <div class="field hidden" id="privTitleField">
+          <label for="ePrivTitle">Title (private)</label>
+          <input id="ePrivTitle" type="text" placeholder="e.g. Dentist, Nursery, Appointment" />
+        </div>
+
+<div class="field">
           <label for="entryNotes">Notes (optional)</label>
           <input id="eNotes" type="text" placeholder="Optional notes..." />
         </div>
@@ -1192,6 +1220,127 @@ function conflictEntriesForChecks(){
   return (state.entriesYear && state.entriesYear.length) ? state.entriesYear : state.entriesMonth;
 }
 
+
+// --- My View toggle (calendar-only) ---
+const MYVIEW_KEY = "dc_lbb_myview_v1";
+function loadMyView(){
+  try{
+    const v = localStorage.getItem(MYVIEW_KEY);
+    state.myView = (v === "1");
+  }catch(_){ state.myView = false; }
+}
+function saveMyView(){
+  try{ localStorage.setItem(MYVIEW_KEY, state.myView ? "1" : "0"); }catch(_){}
+}
+function canUseMyView(){ return !!state.accessAuth; }
+function applyMyViewButton(){
+  if(!els.btnMyView) return;
+  const enabled = canUseMyView();
+  els.btnMyView.disabled = !enabled;
+  const on = enabled && state.myView;
+  els.btnMyView.textContent = on ? "My View: On" : "My View: Off";
+  els.btnMyView.classList.toggle("toggle-on", !!on);
+}
+
+function populateEntryTypeSelect(){
+  const sel = els.eType;
+  if(!sel) return;
+
+  sel.innerHTML = "";
+  const types = state.privateView
+    ? ["Course","Meeting","Appointment","Other"]
+    : ["A/L","C/L","N/A","Course","Meeting","Other"];
+
+  types.forEach(t=>{
+    const o = document.createElement("option");
+    o.value = t;
+    o.textContent = t;
+    sel.appendChild(o);
+  });
+}
+
+function calendarEntries(){
+  const base = state.entriesMonth || [];
+
+  // My View: only show my own entries
+  if(state.myView && state.accessAuth){
+    return base.filter(e => e.staffId === state.accessAuth.staffId);
+  }
+
+  return base;
+}
+
+
+// --- Private View (UI privacy; DB privacy requires RLS/RPC) ---
+const PRIVATE_KEY = "dc_lbb_private_view_v1";
+function loadPrivateView(){
+  try{ state.privateView = (localStorage.getItem(PRIVATE_KEY) === "1"); }catch(_){ state.privateView = false; }
+}
+function savePrivateView(){
+  try{ localStorage.setItem(PRIVATE_KEY, state.privateView ? "1" : "0"); }catch(_){}
+}
+function applyPrivateButton(){
+  if(!els.btnPrivateView) return;
+  const enabled = !!state.accessAuth;
+  els.btnPrivateView.disabled = !enabled;
+  const on = enabled && state.privateView;
+  els.btnPrivateView.textContent = on ? "Private: On" : "Private: Off";
+  els.btnPrivateView.classList.toggle("toggle-private", !!on);
+  // Show/hide private title field in entry modal
+  if(els.privTitleField){
+    if(on) els.privTitleField.classList.remove("hidden");
+    else els.privTitleField.classList.add("hidden");
+  }
+}
+
+// Load private entries for the current visible month
+async function loadPrivateEntriesForMonth(){
+  state.privateEntriesMonth = [];
+  if(!state.accessAuth || !state.privateView) return;
+
+  const ym = state.viewMonth;
+  const start = new Date(ym.getFullYear(), ym.getMonth(), 1);
+  const end = new Date(ym.getFullYear(), ym.getMonth()+1, 0);
+  const startISO = start.toISOString().slice(0,10);
+  const endISO = end.toISOString().slice(0,10);
+
+  const { data, error } = await supabase
+    .from("calendar_private_entries")
+    .select("id, staff_id, start_date, end_date, entry_type, title, notes, created_at")
+    .eq("staff_id", state.accessAuth.staffId)
+    .lte("start_date", endISO)
+    .gte("end_date", startISO)
+    .order("start_date", { ascending: true });
+
+  if(error){ console.warn("Private entries load error:", error); return; }
+
+  state.privateEntriesMonth = (data||[]).map(r => ({
+    id: r.id,
+    staffId: r.staff_id,
+    personName: state.accessAuth.name,
+    team: state.accessAuth.team || "",
+    link: state.accessAuth.link || "",
+    type: r.entry_type,
+    start: r.start_date,
+    end: r.end_date,
+    notes: [r.title||"", r.notes||""].filter(Boolean).join(" — "),
+    status: "AUTO_APPROVED",
+    isPrivate: true,
+    createdAt: r.created_at || ""
+  }));
+}
+
+function calendarEntriesUnified(){
+  if(state.privateView && state.accessAuth){
+    return state.privateEntriesMonth || [];
+  }
+  const base = state.entriesMonth || [];
+  if(state.myView && state.accessAuth){
+    return base.filter(e => e.staffId === state.accessAuth.staffId);
+  }
+  return base;
+}
+
 function inRolling12Months(dateStr){
   const today = new Date(); today.setHours(0,0,0,0);
   const end = new Date(today); end.setMonth(end.getMonth()+12);
@@ -1264,6 +1413,9 @@ const state = {
   entriesMonth: [],        // month window entries (for calendar)
   entriesYear: [],         // year window entries (for list when scoped)
   entriesYearFor: null,    // number (year) cache key
+  myView: false,
+  privateView: false,
+  privateEntriesMonth: [],
 
 };
 
@@ -1277,6 +1429,8 @@ const els = {
   btnPrev: document.getElementById("btnPrev"),
   btnNext: document.getElementById("btnNext"),
   btnToday: document.getElementById("btnToday"),
+  btnMyView: document.getElementById("btnMyView"),
+  btnPrivateView: document.getElementById("btnPrivateView"),
   monthTitle: document.getElementById("monthTitle"),
   windowLabel: document.getElementById("windowLabel"),
 
@@ -1316,6 +1470,8 @@ const els = {
   eStart: document.getElementById("eStart"),
   eEnd: document.getElementById("eEnd"),
   eNotes: document.getElementById("eNotes"),
+  ePrivTitle: document.getElementById("ePrivTitle"),
+  privTitleField: document.getElementById("privTitleField"),
   autoHint: document.getElementById("autoHint"),
   btnSaveEntry: document.getElementById("btnSaveEntry"),
   btnDeleteEntry: document.getElementById("btnDeleteEntry"),
@@ -1373,6 +1529,9 @@ function renderAuth(){
   els.btnLogin.style.display = state.accessAuth ? "none" : "";
   els.btnLogout.style.display = state.accessAuth ? "" : "none";
   els.btnNew.disabled = !state.accessAuth;
+
+  applyMyViewButton();
+  applyPrivateButton();
 }
 
 // --- Supabase ---
@@ -1701,7 +1860,7 @@ function renderMonth(){
   const end = new Date(state.today); end.setMonth(end.getMonth()+12);
   els.windowLabel.textContent = `Window: ${fmtUKDateObj(start)} → ${fmtUKDateObj(end)}`;
 
-  const monthEntries = state.entriesMonth;
+  const monthEntries = calendarEntriesUnified();
   els.kpiApproved.textContent = `Approved: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && (e.status==="APPROVED"||e.status==="AUTO_APPROVED")).length}`;
   els.kpiPending.textContent = `Pending: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="PENDING").length}`;
   els.kpiRejected.textContent = `Rejected: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="REJECTED").length}`;
@@ -1732,7 +1891,7 @@ function renderMonth(){
       addSystemChip(cell, `Week ${weekNumberForSunday(dateObj)}`);
     }
 
-    const events = state.entriesMonth
+    const events = monthEntries
       .filter(e=> (e.start <= dayStr && e.end >= dayStr) && e.status!=="CANCELLED")
       .sort((a,b)=> (a.link||"").localeCompare(b.link||"") || (a.personName||"").localeCompare(b.personName||""));
 
@@ -1750,6 +1909,7 @@ function renderMonth(){
                         </div>
                         <div class="pillRow">
                           <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+                          ${e.isPrivate ? `<span class="tag private">Private</span>` : ``}
                           ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
                         </div>`;
       chip.title = e.notes || "";
@@ -1818,6 +1978,7 @@ function renderTypeStatusPills(e){
   const showStatus = isCoverAffectingType(e.type) || (e.status !== "AUTO_APPROVED" && e.status !== "APPROVED");
   return `<div class="pillRow">
             <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+            ${e.isPrivate ? `<span class="tag private">Private</span>` : ``}
             ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
           </div>`;
 }
@@ -1990,6 +2151,65 @@ async function writeAudit(entryId, action, detail){
 async function saveEntry(){
   if(!state.accessAuth) return;
 
+  // Private View: save into calendar_private_entries (no cover/approval logic)
+  if(state.privateView){
+    if(selectedEntryId){
+      alert("Editing private entries isn't enabled yet. Delete and recreate for now.");
+      return;
+    }
+    const start = els.eStart.value;
+    const end = els.eEnd.value;
+    const type = els.eType.value;
+    const title = (els.ePrivTitle ? els.ePrivTitle.value.trim() : "");
+    const notes = els.eNotes.value.trim();
+
+    if(!start || !end){ alert("Pick start and end dates."); return; }
+    if(end < start){ alert("End date cannot be before start date."); return; }
+
+    const payload = {
+      staff_id: state.accessAuth.staffId,
+      start_date: start,
+      end_date: end,
+      entry_type: type,
+      title,
+      notes,
+      created_by: state.accessAuth.accessCode || "ACCESS_CODE"
+    };
+
+    const { data, error } = await supabase
+      .from("calendar_private_entries")
+      .insert(payload)
+      .select("id, staff_id, start_date, end_date, entry_type, title, notes, created_at")
+      .single();
+
+    if(error){
+      alert("Failed to save private entry: " + error.message);
+      return;
+    }
+
+    // Update local state immediately (avoids "disappears" issues)
+    state.privateEntriesMonth = state.privateEntriesMonth || [];
+    state.privateEntriesMonth.push({
+      id: data.id,
+      staffId: data.staff_id,
+      personName: state.accessAuth.name,
+      team: state.accessAuth.team || "",
+      link: state.accessAuth.link || "",
+      type: data.entry_type,
+      start: data.start_date,
+      end: data.end_date,
+      notes: [data.title||"", data.notes||""].filter(Boolean).join(" — "),
+      status: "AUTO_APPROVED",
+      isPrivate: true,
+      createdAt: data.created_at || ""
+    });
+
+    closeEntry();
+    renderMonth();
+    return;
+  }
+
+
   const type = els.eType.value;
   const team = state.accessAuth.team || "";
   const link = state.accessAuth.link || "";
@@ -2114,6 +2334,8 @@ async function doLogin(){
 async function refreshAll(){
   try{
     clearError();
+  loadMyView();
+    loadPrivateView();
   loadAccessAuth();
   await fetchApproverRole();
   renderAuth();
@@ -2185,6 +2407,24 @@ els.btnPrev.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewM
 els.btnNext.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewMonth.getMonth()+1); refreshAll(); });
 els.btnToday.addEventListener("click", ()=>{ const t=new Date(); t.setDate(1); t.setHours(0,0,0,0); state.viewMonth=t; refreshAll(); });
 
+els.btnMyView && els.btnMyView.addEventListener("click", ()=>{
+  if(!state.accessAuth) return;
+  state.myView = !state.myView;
+  saveMyView();
+  applyMyViewButton();
+  applyPrivateButton();
+  renderMonth();
+});
+
+els.btnPrivateView && els.btnPrivateView.addEventListener("click", async ()=>{
+  if(!state.accessAuth) return;
+  state.privateView = !state.privateView;
+  savePrivateView();
+  applyPrivateButton();
+  await loadPrivateEntriesForMonth();
+  renderMonth();
+});
+
 els.btnLogin.addEventListener("click", openLogin);
 
   if(els.loginModal){
@@ -2224,6 +2464,11 @@ if(els.fltScope){
 // Init
 (async function init(){
   els.modeLabel.textContent = "Supabase";
+  loadMyView();
+  loadPrivateView();
+  applyMyViewButton();
+  applyPrivateButton();
+  applyPrivateButton();
   if(!(await initSupabase())) return;
   setEntryTypeOptions();
   await refreshAll();
