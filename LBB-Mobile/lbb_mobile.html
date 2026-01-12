@@ -1,0 +1,2450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Derby Control – Little Black Book</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e5e7eb;
+      --header: #0b1220;
+      --header2: #111827;
+      --chip: rgba(255,255,255,0.08);
+      --chipLine: rgba(255,255,255,0.14);
+
+      /* Roster-matched colours */
+      --al: #dc2626;     /* A/L red */
+      --cl: #f97316;     /* C/L orange */
+      --na: #facc15;     /* N/A yellow */
+      --ok: #16a34a;     /* approved */
+      --warn: #f59e0b;   /* pending */
+      --bad: #ef4444;    /* rejected */
+      --sys: #0b0f1a;    /* system pill */
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+
+    /* ===== Header ===== */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: linear-gradient(180deg, var(--header), var(--header2));
+      color: #f8fafc;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .topbar-inner {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 12px 14px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .brand .tag {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(59,130,246,0.18);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: #e0f2fe;
+    }
+    .chips {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--chipLine);
+      color: #e5e7eb;
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #94a3b8;
+      flex: 0 0 auto;
+      box-shadow: 0 0 0 3px rgba(148,163,184,0.15);
+    }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(22,163,74,0.18); }
+    .dot.off { background: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn.primary {
+      background: rgba(59,130,246,0.20);
+      border-color: rgba(59,130,246,0.28);
+    }
+    .btn.primary:hover { background: rgba(59,130,246,0.26); }
+
+    /* ===== Layout / Tabs ===== */
+    .wrap {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 14px;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .tab {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 800;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .tab[aria-selected="true"] {
+      border-color: rgba(59,130,246,0.35);
+      background: rgba(59,130,246,0.08);
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ===== Calendar Focus ===== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+    .cal-head {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .cal-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .iconbtn {
+      width: 36px;
+      height: 34px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      cursor: pointer;
+      font-weight: 900;
+    }
+    .iconbtn:hover { background: #f8fafc; }
+    .cal-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 240px;
+    }
+    #monthTitle {
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .kpis {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .kpi {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .kpi .dot {
+      width: 9px;
+      height: 9px;
+      box-shadow: none;
+    }
+
+    .calendar {
+      padding: 12px;
+    }
+    .dow {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+      padding: 0 2px;
+    }
+    .dow div {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    #calendarGrid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap:0;
+      align-items: stretch;
+    }
+    .day {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fff;
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .day.outside {
+      background: #f9fafb;
+      color: #94a3b8;
+    }
+    .day.today {
+      outline: 3px solid rgba(59,130,246,0.20);
+      border-color: rgba(59,130,246,0.35);
+    }
+    .day-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 900;
+    }
+    .date-mini {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 900;
+    }
+    .sys-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--sys);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .entry {
+display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+    .entry .who {
+      font-weight: 900;
+      font-size: 13px;
+      line-height: 1.1;
+    }
+    .entry .meta {
+min-width: 0;
+  flex: 1 1 160px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+    .pill {display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      line-height: 1;
+  flex:0 0 auto;
+}
+    .pill.type-al { background: var(--al); color: #fff; }
+    .pill.type-cl { background: var(--cl); color: #fff; }
+    .pill.type-na { background: var(--na); color: #111827; border-color: rgba(0,0,0,0.08); }
+
+    .pill.status-ok { background: rgba(22,163,74,0.10); color: #065f46; border-color: rgba(22,163,74,0.18); }
+    .pill.status-warn { background: rgba(245,158,11,0.10); color: #92400e; border-color: rgba(245,158,11,0.18); }
+    .pill.status-bad { background: rgba(239,68,68,0.10); color: #991b1b; border-color: rgba(239,68,68,0.18); }
+
+    .right-pills {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    /* ===== List tab ===== */
+    .list-wrap {
+      display: grid;
+      gap: 12px;
+    }
+    .filters {
+      padding: 12px;
+    }
+    .grid4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    select, input[type="text"] {
+      width: 100%;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 13px;
+    }
+    .table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+    .table th {
+      background: #f8fafc;
+      text-align: left;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .table td {
+      padding: 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      vertical-align: top;
+    }
+    .table tr:last-child td { border-bottom: none; }
+    .muted { color: var(--muted); }
+
+    /* ===== Modals ===== */
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(15, 23, 42, 0.5);
+      z-index: 100;
+    }
+    .modal.show { display: flex; }
+    .modal-card {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      box-shadow: 0 18px 60px rgba(15, 23, 42, 0.25);
+      overflow: hidden;
+    }
+    .modal-head {
+      padding: 12px 14px;
+      background: #0b1220;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .modal-head h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.2px;
+    }
+    .modal-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .row3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      padding-top: 6px;
+    }
+    .btn2 {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn2.primary {
+      background: rgba(59,130,246,0.12);
+      border-color: rgba(59,130,246,0.25);
+    }
+    .btn2.danger {
+      background: rgba(239,68,68,0.10);
+      border-color: rgba(239,68,68,0.20);
+      color: #991b1b;
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 1100px) {
+      .grid4 { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .topbar-inner { justify-content: center; }
+      .chips { justify-content: center; }
+      .dow { display: none; } /* saves space on mobile; day cards already show dates */
+      #calendarGrid { grid-template-columns: 1fr; }
+      .day { min-height: auto; }
+      .row, .row3 { grid-template-columns: 1fr; }
+      .grid4 { grid-template-columns: 1fr; }
+      .entry .meta { max-width: 100%; }
+    }
+
+    /* legacy error strip ids */
+    #statusBar { display:none; }
+  
+
+/* ===== Calendar visual polish (grid + chips) ===== */
+.calendar{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:12px;
+}
+.dow{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:0;
+  margin:0 0 8px 0;
+  color:var(--muted);
+  font-weight:900;
+  font-size:12px;
+}
+.dow > div{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+}
+#calendarGrid{
+  gap:0;
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+}
+.day{
+  border:0;
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+  border-radius:0;
+  padding:10px;
+  min-height:150px;
+  background:#fff;
+}
+.day:nth-child(7n){
+  border-right:0;
+}
+.day.outside{
+  background:#f8fafc;
+  color:#94a3b8;
+}
+.day.today{
+  outline:2px solid rgba(59,130,246,.35);
+  outline-offset:-2px;
+  background:rgba(59,130,246,.03);
+}
+.dayNum{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:6px;
+}
+.dayNum span:first-child{
+  font-weight:900;
+  font-size:13px;
+  color:var(--ink);
+}
+.dayNum .wday{
+  font-weight:900;
+  font-size:11px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.systemChip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:#0b1220;
+  color:#fff;
+  font-size:11px;
+  font-weight:800;
+  width:fit-content;
+}
+.systemChip .muted{
+  color:rgba(255,255,255,.72);
+  font-weight:900;
+}
+.eventChip{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  gap:6px;
+  padding:8px 10px;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  background:#fff;
+  box-shadow:0 1px 0 rgba(17,24,39,.04);
+  min-width:0;
+}
+
+.eventChip .meta{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.eventChip .meta b{
+  font-size:13px;
+  line-height:1.1;
+}
+.eventChip .meta span{
+  font-size:11px;
+  color:var(--muted);
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+.eventChip .pillRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+  justify-content:flex-start;
+  width:100%;
+  min-width:0;
+}
+
+.tag{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:3px 9px;
+  border-radius:999px;
+  border:1px solid transparent;
+  font-size:11px;
+  font-weight:900;
+  line-height:1;
+  white-space:nowrap;
+}
+
+/* Leave type colours (match roster vibe) */
+.tag.al{ background:#dc2626; border-color:#b91c1c; color:#fff; } /* red */
+.tag.cl{ background:#f97316; border-color:#ea580c; color:#fff; } /* orange */
+.tag.na{ background:#facc15; border-color:#eab308; color:#111827; } /* yellow */
+.tag.info{ background:#e5e7eb; border-color:#d1d5db; color:#111827; }
+
+/* Status */
+.tag.ok{ background:rgba(34,197,94,.14); border-color:rgba(34,197,94,.35); color:#166534; }
+.tag.warn{ background:rgba(245,158,11,.14); border-color:rgba(245,158,11,.35); color:#92400e; }
+.tag.bad{ background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.35); color:#991b1b; }
+
+/* Keep calendar readable at smaller widths */
+@media (max-width: 980px){
+  .calendar{ padding:10px; }
+  #calendarGrid{ overflow-x:auto; display:block; }
+  .dow{ display:none; }
+  #calendarGrid{ border-radius:14px; }
+  #calendarGrid{
+  display:grid;
+  grid-template-columns:repeat(7, 1fr);
+  gap:10px;
+  align-items:stretch;
+  padding:10px;
+}
+
+}
+
+
+/* ===== Fix: ensure calendar grid is 7-column ===== */
+#calendarGrid{
+  display:grid;
+  grid-template-columns:repeat(7, 1fr);
+  gap:0;
+}
+#calendarGrid{
+  overflow:hidden;
+}
+
+
+/* ===== Calendar cell clarity patch ===== */
+#calendarGrid{
+  gap: 12px;
+  padding: 12px;
+}
+#calendarGrid .dayCell{
+  border: 1px solid rgba(17,24,39,.14);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px;
+  min-height: 150px;
+  box-shadow: 0 1px 2px rgba(17,24,39,.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+#calendarGrid .dayCell.otherMonth{
+  background: #f9fafb;
+  opacity: .85;
+}
+#calendarGrid .dayNum{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(17,24,39,.10);
+}
+#calendarGrid .dayNum .d{
+  font-weight: 800;
+}
+#calendarGrid .dayNum .dow{
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+#calendarGrid .dayNum span:first-child{font-weight:800;}
+#calendarGrid .dayNum .tiny{
+  font-size:12px;
+  color:#6b7280;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+#calendarGrid .dayCell.isOutside{background:#f9fafb; opacity:.85;}
+
+
+/* ==== Calendar fit + readability overrides (v5.1) ==== */
+#calendarGrid{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:12px!important;padding:12px!important;box-sizing:border-box;min-width:0;}
+.dayCell{min-width:0;overflow:hidden;}
+.entryCard{min-width:0;}
+.entryMeta{min-width:0;}
+.calendar{overflow-x:auto;}
+.wrap{max-width:calc(100vw - 24px)!important;}
+
+select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
+
+.titleRow{display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap}
+.cardTitle{font-weight:900; font-size:1.05rem}
+
+
+/* ===== Mobile UX: keep desktop perfect, make small screens sane ===== */
+.calScroll{ /* desktop: no effect */
+  overflow: visible;
+}
+@media (max-width: 860px){
+  header{padding: calc(.6rem + env(safe-area-inset-top)) .75rem .6rem;}
+  .headerInner{gap:.5rem}
+  .brand h1{font-size:1rem}
+  main{padding:.75rem}
+  .tabs{position:sticky; top:0; z-index:15; background:var(--bg); padding:.5rem 0}
+  .card{border-radius:16px}
+
+  /* Calendar becomes horizontally scrollable, not squashed */
+  .calScroll{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:6px;
+  }
+  #calendarGrid{
+    min-width: 980px; /* ensures 7 columns remain readable */
+  }
+
+  /* Make day cells a touch taller and clearer on mobile */
+  .dayCell{
+    min-height:160px;
+    padding:.6rem .65rem;
+  }
+  .dayNum{font-size:.95rem}
+
+  /* Event bubble stacks cleanly */
+  .eventChip{padding:.55rem .6rem}
+  .eventMeta b{font-size:.82rem}
+  .eventMeta small{font-size:.72rem}
+  .pillRow{gap:.3rem}
+
+  /* Tables and filter rows: always scroll instead of breaking layout */
+  .tableWrap{overflow:auto; -webkit-overflow-scrolling:touch;}
+  .table{min-width: 920px;}
+}
+@media (max-width: 520px){
+  main{padding:.6rem}
+  .dayCell{min-height:150px}
+  #calendarGrid{min-width: 920px;}
+}
+
+/* ===== My View toggle ===== */
+.btn2.toggle-on{
+  background: rgba(59,130,246,0.12);
+  border-color: rgba(59,130,246,0.25);
+}
+
+
+/* ===== Mobile Companion Mode (PWA-style) ===== */
+body.mobile-companion{ overscroll-behavior: none; }
+@media (max-width: 700px){
+  /* Make month fit the viewport like a real mobile calendar */
+  .container{ padding: 10px; }
+  .card{ border-radius: 16px; }
+  .toolbar{ gap: 8px; flex-wrap: wrap; }
+  .toolbar .titleBlock{ width: 100%; order: 3; text-align: center; }
+  .toolbar .monthTitle{ font-size: 1.05rem; }
+
+  /* Calendar grid: 7 columns x 6 rows, fixed height */
+  #calendarGrid{
+    height: calc(100vh - 210px);
+    min-height: 520px;
+  }
+  .calGrid{
+    grid-auto-rows: 1fr;
+    gap: 8px;
+  }
+  .dayCell{
+    padding: 6px;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .dayHead{ margin-bottom: 4px; }
+  .dayNum{ font-size: 0.92rem; }
+  .dowMini{ font-size: 0.68rem; }
+
+  /* Ultra-compact entries: slim pills, name-only */
+  .entryCard{
+    padding: 4px 6px;
+    border-radius: 10px;
+  }
+  .entryTitle{ font-size: 0.78rem; line-height: 1.05; }
+  .entryMeta{ display:none; }
+  .tagRow{ margin-top: 4px; }
+  .tag{ padding: 2px 6px; font-size: 0.68rem; }
+  .hint{ font-size: 0.72rem; }
+
+  /* Allow per-day internal scroll without “page scroll” */
+  .dayCell .entriesWrap{ overflow:auto; -webkit-overflow-scrolling: touch; max-height: calc(100% - 26px); }
+  .dayCell .entriesWrap::-webkit-scrollbar{ display:none; }
+
+  /* Bottom nav feel */
+  .tabs{ position: sticky; top: 0; z-index: 5; background: transparent; }
+}
+
+/* Day details sheet (mobile) */
+#daySheet{ position: fixed; inset: 0; display:none; z-index: 50; background: rgba(0,0,0,.45); }
+#daySheet .sheet{ position:absolute; left:0; right:0; bottom:0; background: #fff; border-top-left-radius: 18px; border-top-right-radius: 18px; max-height: 80vh; overflow:auto; box-shadow: 0 -10px 30px rgba(0,0,0,.25); }
+#daySheet .sheetHead{ display:flex; align-items:center; justify-content:space-between; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+#daySheet .sheetTitle{ font-weight:800; }
+#daySheet .sheetBody{ padding: 12px 14px 18px; display:flex; flex-direction:column; gap:10px; }
+#daySheet .closeBtn{ border:1px solid var(--line); background:#fff; border-radius: 12px; padding: 8px 10px; }
+</style>
+</head>
+<body class="mobile-companion">
+
+  <!-- legacy error handler strip -->
+  <div id="errBar" style="display:none;"></div>
+  <div id="errText" style="display:none;"></div>
+
+  <div id="statusBar"></div>
+  <div id="statusText"></div>
+
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span>📓 Little Black Book</span>
+        <span class="tag">Supabase</span>
+      </div>
+
+      <div class="chips">
+        <a id="btnBack" class="btn" href="https://nh9qxw5shd-oss.github.io/RosterDash">← Back to Roster</a>
+
+        <span class="chip">
+          <span id="connDot" class="dot off"></span>
+          <span id="connText">Not connected</span><span id="modeLabel" style="display:none;">Not connected</span>
+        </span>
+
+        <span class="chip">
+          <span class="dot ok" style="background:#3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.18);"></span>
+          <span id="whoAmI">Not signed in</span>
+        </span>
+
+        <button id="btnLogin" class="btn">Sign in</button>
+        <button id="btnNew" class="btn primary">+ New entry</button>
+        <button id="btnLogout" class="btn" style="display:none;">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="tabs">
+      <button id="tabCalendar" class="tab" aria-selected="true">Calendar</button>
+      <button id="tabList" class="tab" aria-selected="false">List view</button>
+      <button id="tabApprovals" class="tab" aria-selected="false" style="display:none;">Approvals</button>
+    </div>
+
+    <!-- ===== Calendar panel ===== -->
+    <section id="panelCalendar" class="panel active">
+      <div class="card">
+        <div class="cal-head">
+          <div class="cal-controls">
+            <button id="btnPrev" class="iconbtn" title="Previous month">‹</button>
+            <button id="btnToday" class="btn2" title="Jump to today">Today</button>
+            <button id="btnNext" class="iconbtn" title="Next month">›</button>
+            <span class="chip" style="background:#fff; color:var(--ink); border-color:var(--line);">
+              <span class="dot ok" style="background:#3b82f6; box-shadow:none;"></span>
+              <span id="windowLabel">12-month window</span>
+            </span>
+            <button id="btnMyView" class="btn2" type="button" title="Show only your entries on the calendar" disabled>My View: Off</button>
+          </div>
+
+          <div class="cal-title">
+            <div id="monthTitle">Month</div>
+            <div class="subtle">Visibility: everyone (edit: your own only)</div>
+          </div>
+
+          <div class="kpis">
+            <span class="kpi"><span class="dot" style="background:var(--ok)"></span><span id="kpiApproved">Approved: 0</span></span>
+            <span class="kpi"><span class="dot" style="background:var(--warn)"></span><span id="kpiPending">Pending: 0</span></span>
+            <span class="kpi"><span class="dot" style="background:var(--bad)"></span><span id="kpiRejected">Rejected: 0</span></span>
+          </div>
+        </div>
+
+        <div class="calendar">
+          <div class="dow">
+            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+          </div>
+          <div class="calScroll"><div id="calendarGrid"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== List panel ===== -->
+    <section id="panelList" class="panel">
+      <div class="list-wrap">
+        <div class="card filters">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="font-weight:900;">Entries (list view)</div>
+            <div class="chip" style="background:#fff; color:var(--ink); border-color:var(--line);">
+              <span class="dot ok" style="background:#3b82f6; box-shadow:none;"></span>
+              <span id="listCount">0 shown</span>
+            </div>
+          </div>
+
+          <div class="grid4" style="margin-top:12px;">
+            <div class="field">
+              <label for="fltLink">Filter: Link</label>
+              <select id="fltLink"></select>
+            </div>
+            <div class="field">
+              <label for="fltType">Filter: Type</label>
+              <select id="fltType"></select>
+            </div>
+            <div class="field">
+              <label for="fltStatus">Filter: Status</label>
+              <select id="fltStatus"></select>
+            </div>
+            <div class="field">
+              <label for="fltPerson">Filter: Person</label>
+              <select id="fltPerson"></select>
+            </div>
+            <div class="field" style="grid-column:1 / -1; max-width:260px;">
+              <label for="fltScope">Filter scope</label>
+              <select id="fltScope"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:12px;">
+          <table class="table">
+            <thead>
+            <tr>
+              <th style="width:170px;">Date(s)</th>
+              <th>Person</th>
+              <th style="width:110px;">Team</th>
+              <th style="width:120px;">Link</th>
+              <th style="width:110px;">Type</th>
+              <th style="width:140px;">Status</th>
+              <th style="width:90px;">Edit</th>
+            </tr>
+          </thead>
+            <tbody id="listBody"></tbody>
+          </table>
+
+          <div class="subtle" style="margin-top:10px;">
+            Auto-approval rule (first pass): if the request is within the next <b>12 months</b> and you’re the <b>first person in your link</b> requesting that date, it’s <b>auto-approved</b>. Second+ in the same link/day becomes <b>pending</b> for roster/RCM/SNDM/HoC approval.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Approvals panel (approvers only) ===== -->
+    <section id="panelApprovals" class="panel">
+      <div class="card">
+        <div class="card-hd">
+          <div class="titleRow">
+            <div>
+              <div class="cardTitle">Pending requests</div>
+              <div class="subtle">Only <b>A/L</b> and <b>C/L</b> can be pending (2nd+ request in same link/day).</div>
+            </div>
+            <span class="chip" style="background:#fff; color:var(--ink); border-color:var(--line);">
+              <span class="dot warn" style="background:#f59e0b; box-shadow:none;"></span>
+              <span id="pendingCount">0 pending</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="card-bd">
+          <div class="tableWrap">
+            <table class="table" id="pendingTable">
+              <thead>
+                <tr>
+                  <th>Date(s)</th>
+                  <th>Person</th>
+                  <th>Team</th>
+                  <th>Link</th>
+                  <th>Type</th>
+                  <th>Notes</th>
+                  <th class="rightAlign">Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== Login modal ===== -->
+  <div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-label="Sign in">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Sign in</h3>
+        <button id="btnCloseLogin" class="btn" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="accessCode">5‑character access code</label>
+          <input id="accessCode" type="text" inputmode="text" maxlength="5" autocomplete="off" placeholder="ABCDE" />
+          <div id="autoHint" class="subtle" style="margin-top:6px;"></div>
+        </div>
+        <label class="chip" style="background:#fff; color:var(--ink); border-color:var(--line); justify-content:flex-start;">
+          <input id="rememberMe" type="checkbox" style="margin:0 8px 0 0;" />
+          Remember me on this device
+        </label>
+
+        <div class="actions">
+          <button id="btnBackUnused" class="btn2" type="button" style="display:none;">Back</button>
+          <button id="loginBack" class="btn2" type="button">Cancel</button>
+          <button id="btnDoLogin" class="btn2 primary" type="button">Sign in</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Entry modal ===== -->
+  <div id="entryModal" class="modal" role="dialog" aria-modal="true" aria-label="Entry">
+    <div class="modal-card" style="width:min(760px, 100%);">
+      <div class="modal-head">
+        <h3 id="entryTitle">New entry</h3>
+        <button id="btnCloseEntry" class="btn" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="row3">
+          <div class="field">
+            <label for="entryPerson">Person</label>
+            <select id="entryPerson"></select>
+          </div>
+          <div class="field">
+            <label for="eTeam">Team</label>
+            <select id="eTeam"></select>
+          </div>
+          <div class="field">
+            <label for="entryLink">Link</label>
+            <select id="eLink"></select>
+          </div>
+          <div class="field">
+            <label for="entryType">Type</label>
+            <select id="eType"></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="entryStart">Start date</label>
+            <input id="eStart" type="date" />
+          </div>
+          <div class="field">
+            <label for="entryEnd">End date</label>
+            <input id="eEnd" type="date" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="entryNotes">Notes (optional)</label>
+          <input id="eNotes" type="text" placeholder="Optional notes..." />
+        </div>
+
+        <div class="actions">
+          <button id="btnBackUnused2" class="btn2" type="button" style="display:none;">Back</button>
+          <button id="btnDeleteEntry" class="btn2 danger" type="button" style="margin-right:auto; display:none;">Delete</button>
+          <button id="btnSaveEntry" class="btn2 primary" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+  const sb = () => document.getElementById('statusBar');
+  const st = () => document.getElementById('statusText');
+  function show(msg){
+    try{
+      sb().style.display = 'block';
+      st().textContent = msg;
+    }catch(e){}
+  }
+  window.addEventListener('error', (ev)=>{
+    const msg = (ev && (ev.message||ev.error)) ? String(ev.message||ev.error) : 'Unknown error';
+    show('JavaScript error: ' + msg + (ev && ev.filename ? '\n' + ev.filename + ':' + ev.lineno : ''));
+  });
+  window.addEventListener('unhandledrejection', (ev)=>{
+    show('Promise rejection: ' + String(ev.reason||ev));
+  });
+  window.lbbOpenLogin = function(){
+    const m = document.getElementById('loginBack');
+    if(m){ m.classList.add('show'); }
+  };
+  window.lbbCloseLogin = function(){
+    const m = document.getElementById('loginBack');
+    if(m){ m.classList.remove('show'); }
+  };
+  // basic config sanity check (catches line breaks / ellipsis)
+  window.lbbValidateConfig = function(url,key){
+    if(!url || !key) return 'Missing SUPABASE_URL or SUPABASE_ANON_KEY';
+    if(String(url).includes('\n') || String(key).includes('\n')) return 'Your SUPABASE_URL or SUPABASE_ANON_KEY contains a line break. It must be ONE LINE.';
+    if(String(key).includes('...')) return 'Your SUPABASE_ANON_KEY still contains "..." (ellipsis). Paste the FULL anon key from Supabase settings.';
+    return '';
+  };
+})();
+  </script>
+
+  <script type="module">
+  /* ==========================================================
+   Derby Control – Little Black Book (Calendar bolt‑on)
+   - Supabase-backed (no local demo mode)
+   - Personal login via 5‑char access code (staff_directory.access_code)
+   - Optional admin approvals via existing roster Supabase Auth session
+   ========================================================== */
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://ywvbxfitzsuyhvxcdnth.supabase.co";      // <-- paste your project URL
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dmJ4Zml0enN1eWh2eGNkbnRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMyMzAwNTMsImV4cCI6MjA3ODgwNjA1M30.d-yN2C599j4BInhVt6QKDImhGGmiidIlOjuxAAnjVCM"; // <-- paste your anon key
+const BACK_TO_ROSTER_URL = "https://nh9qxw5shd-oss.github.io/RosterDash"; // <-- optional; leave blank to use browser back()
+
+// Quick sanity check for iOS/no-console debugging
+const __cfgErr = (window.lbbValidateConfig ? window.lbbValidateConfig(SUPABASE_URL, SUPABASE_ANON_KEY) : "");
+if(__cfgErr){
+  const sb = document.getElementById('statusBar');
+  const st = document.getElementById('statusText');
+  if(sb && st){ sb.style.display = 'block'; st.textContent = __cfgErr; }
+}
+
+const pad2 = n => String(n).padStart(2,"0");
+const isoDate = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+
+function fmtUKDateObj(d){
+  if(!d) return "";
+  const x = new Date(d);
+  return `${pad2(x.getDate())}/${pad2(x.getMonth()+1)}/${x.getFullYear()}`;
+}
+function fmtUKISO(iso){
+  if(!iso) return "";
+  // Expect YYYY-MM-DD; keep it deterministic (no locale surprises)
+  const [y,m,dd] = String(iso).split("-").map(Number);
+  if(!y||!m||!dd) return String(iso);
+  return `${pad2(dd)}/${pad2(m)}/${y}`;
+}
+
+function startOfDay(d){
+  const x = new Date(d);
+  x.setHours(0,0,0,0);
+  return x;
+}
+
+// ===== System labels (non-editable) =====
+const SYSTEM_NEXT_PAYDAY = new Date("2026-01-02T00:00:00"); // Friday
+const SYSTEM_BASE_WEEK_SUN = new Date("2025-12-28T00:00:00"); // Sunday
+const SYSTEM_BASE_WEEK_NUM = 8;
+const SYSTEM_WEEK_CYCLE = 12;
+
+function isPayDay(dateObj){
+  if(dateObj.getDay() !== 5) return false; // Friday
+  const a = startOfDay(dateObj).getTime();
+  const b = startOfDay(SYSTEM_NEXT_PAYDAY).getTime();
+  const diffDays = Math.round((a - b) / 86400000);
+  const mod = ((diffDays % 28) + 28) % 28;
+  return mod === 0;
+}
+function weekNumberForSunday(dateObj){
+  const a = startOfDay(dateObj).getTime();
+  const b = startOfDay(SYSTEM_BASE_WEEK_SUN).getTime();
+  const diffWeeks = Math.floor((a - b) / (86400000 * 7));
+  const num = ((SYSTEM_BASE_WEEK_NUM - 1 + diffWeeks) % SYSTEM_WEEK_CYCLE + SYSTEM_WEEK_CYCLE) % SYSTEM_WEEK_CYCLE + 1;
+  return num;
+}
+function addSystemChip(cell, text){
+  const chip = document.createElement("div");
+  chip.className = "systemChip";
+  chip.innerHTML = `<span class="muted">System</span><span>${escapeHtml(text)}</span>`;
+  entriesWrap.appendChild(chip);
+}
+
+const parseISO = s => { const [y,m,d]=String(s).split("-").map(Number); return new Date(y, m-1, d); };
+const addDays = (d, n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const sameDay = (a,b) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+
+function normaliseCode(s){ return (s||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,5); }
+function normaliseText(s){ return (s||"").trim().replace(/\s+/g," "); }
+
+function entryTypeLabel(t){
+  if(t==="AL") return "A/L";
+  if(t==="CL") return "C/L";
+  if(t==="NA") return "N/A";
+  if(t==="COURSE") return "Course";
+  if(t==="MEETING") return "Meeting";
+  if(t==="APPOINTMENT") return "Appointment";
+  return "Other";
+}
+function statusTag(status){
+  if(status==="AUTO_APPROVED") return ["Auto", "ok"];
+  if(status==="APPROVED") return ["Approved","ok"];
+  if(status==="PENDING") return ["Pending","warn"];
+  if(status==="REJECTED") return ["Rejected","bad"];
+  if(status==="CANCELLED") return ["Cancelled","info"];
+  return ["Unknown","info"];
+}
+
+function isCoverAffectingType(t){
+  return t === "AL" || t === "CL";
+}
+function typeClass(t){
+  if(t==="AL") return "al";
+  if(t==="CL") return "cl";
+  if(t==="NA") return "na";
+  return "info"; // fallback
+}
+
+function typeLabel(t){
+  if(t==="AL") return "A/L";
+  if(t==="CL") return "C/L";
+  if(t==="NA") return "N/A";
+  if(t==="COURSE") return "Course";
+  if(t==="MEETING") return "Meeting";
+  return "Other";
+}
+
+
+function conflictEntriesForChecks(){
+  // If the user has switched list scope to whole year, we may have year data cached.
+  // Use it for cover checks when available; otherwise fall back to month data.
+  return (state.entriesYear && state.entriesYear.length) ? state.entriesYear : state.entriesMonth;
+}
+
+
+// --- My View toggle (calendar-only) ---
+const MYVIEW_KEY = "dc_lbb_myview_v1";
+function loadMyView(){
+  try{
+    const v = localStorage.getItem(MYVIEW_KEY);
+    state.myView = (v === "1");
+  }catch(_){ state.myView = false; }
+}
+function saveMyView(){
+  try{ localStorage.setItem(MYVIEW_KEY, state.myView ? "1" : "0"); }catch(_){}
+}
+function canUseMyView(){ return !!state.accessAuth; }
+function applyMyViewButton(){
+  if(!els.btnMyView) return;
+  const enabled = canUseMyView();
+  els.btnMyView.disabled = !enabled;
+  const on = enabled && state.myView;
+  els.btnMyView.textContent = on ? "My View: On" : "My View: Off";
+  els.btnMyView.classList.toggle("toggle-on", !!on);
+}
+function calendarEntries(){
+  const base = state.entriesMonth || [];
+  if(state.myView && state.accessAuth){
+    return base.filter(e => e.staffId === state.accessAuth.staffId);
+  }
+  return base;
+}
+
+
+function inRolling12Months(dateStr){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const end = new Date(today); end.setMonth(end.getMonth()+12);
+  const d = parseISO(dateStr); d.setHours(0,0,0,0);
+  return d >= today && d < end;
+}
+function eachDayInclusive(startStr, endStr){
+  const s = parseISO(startStr), e = parseISO(endStr);
+  const out=[];
+  for(let d=new Date(s); d<=e; d=addDays(d,1)) out.push(isoDate(d));
+  return out;
+}
+function escapeHtml(s){
+  return String(s||"")
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+}
+
+function lockSelect(sel, value, label){
+  if(!sel) return;
+  const v = (value ?? "");
+  const lab = (label ?? v ?? "");
+  sel.innerHTML = `<option value="${escapeHtml(String(v))}">${escapeHtml(String(lab || '—'))}</option>`;
+  sel.value = String(v);
+  sel.disabled = true;
+  sel.classList.add('locked');
+}
+
+
+// Entry type options (modal)
+function setEntryTypeOptions(){
+  const sel = document.getElementById('eType');
+  if(!sel) return;
+
+  // Keep values stable: these are what we store in Supabase
+  const opts = [
+    { v: 'AL',      label: 'A/L' },
+    { v: 'CL',      label: 'C/L' },
+    { v: 'NA',      label: 'N/A' },
+    { v: 'COURSE',  label: 'Course' },
+    { v: 'MEETING', label: 'Meeting' },
+    { v: 'OTHER',   label: 'Other' },
+  ];
+
+  const current = sel.value || 'AL';
+  sel.innerHTML = '';
+  for(const o of opts){
+    const opt = document.createElement('option');
+    opt.value = o.v;
+    opt.textContent = o.label;
+    sel.appendChild(opt);
+  }
+  // Restore selection if possible
+  sel.value = opts.some(x=>x.v===current) ? current : 'AL';
+  sel.disabled = false;
+  sel.classList.remove('locked');
+}
+
+const AUTH_KEY = "dc_lbb_auth_v1";
+const SESSION_AUTH_KEY = "dc_lbb_auth_session_v1";
+
+let supabase = null;
+
+const state = {
+  today: (()=>{ const t=new Date(); t.setHours(0,0,0,0); return t; })(),
+  viewMonth: (()=>{ const t=new Date(); t.setHours(0,0,0,0); t.setDate(1); return t; })(),
+  accessAuth: null,        // { staffId, name, team, link, code }
+  approverAuth: null,      // { userId, role } from profiles via Supabase Auth (optional)
+  people: [],              // {id,name,team,link,code,is_active}
+  entriesMonth: [],        // month window entries (for calendar)
+  entriesYear: [],         // year window entries (for list when scoped)
+  entriesYearFor: null,    // number (year) cache key
+  myView: false,
+
+};
+
+const els = {
+  modeLabel: document.getElementById("modeLabel"),
+  connDot: document.getElementById("connDot"),
+  connText: document.getElementById("connText"),
+  whoAmI: document.getElementById("whoAmI"),
+  btnBack: document.getElementById("btnBack"),
+
+  btnPrev: document.getElementById("btnPrev"),
+  btnNext: document.getElementById("btnNext"),
+  btnToday: document.getElementById("btnToday"),
+  btnMyView: document.getElementById("btnMyView"),
+  monthTitle: document.getElementById("monthTitle"),
+  windowLabel: document.getElementById("windowLabel"),
+
+  calendarGrid: document.getElementById("calendarGrid"),
+      calendarGridWrap: document.getElementById("calendarGrid"),
+
+  btnLogin: document.getElementById("btnLogin"),
+  btnLogout: document.getElementById("btnLogout"),
+  btnNew: document.getElementById("btnNew"),
+
+  kpiApproved: document.getElementById("kpiApproved"),
+  kpiPending: document.getElementById("kpiPending"),
+  kpiRejected: document.getElementById("kpiRejected"),
+
+  fltLink: document.getElementById("fltLink"),
+  fltScope: document.getElementById("fltScope"),
+  fltType: document.getElementById("fltType"),
+  fltStatus: document.getElementById("fltStatus"),
+  fltPerson: document.getElementById("fltPerson"),
+  listCount: document.getElementById("listCount"),
+  listBody: document.getElementById("listBody"),
+  loginModal: document.getElementById("loginModal"),
+
+  loginBack: document.getElementById("loginBack"),
+  btnCloseLogin: document.getElementById("btnCloseLogin"),
+  accessCode: document.getElementById("accessCode"),
+  rememberMe: document.getElementById("rememberMe"),
+  btnDoLogin: document.getElementById("btnDoLogin"),
+
+  entryModal: document.getElementById("entryModal"),
+  btnCloseEntry: document.getElementById("btnCloseEntry"),
+  entryTitle: document.getElementById("entryTitle"),
+  ePerson: document.getElementById("entryPerson"),
+  eType: document.getElementById("eType"),
+  eTeam: document.getElementById("eTeam"),
+  eLink: document.getElementById("eLink"),
+  eStart: document.getElementById("eStart"),
+  eEnd: document.getElementById("eEnd"),
+  eNotes: document.getElementById("eNotes"),
+  autoHint: document.getElementById("autoHint"),
+  btnSaveEntry: document.getElementById("btnSaveEntry"),
+  btnDeleteEntry: document.getElementById("btnDeleteEntry"),
+};
+
+
+function setError(msg){
+  const bar = document.getElementById("errBar");
+  const txt = document.getElementById("errText");
+  if(!bar || !txt) return;
+  txt.textContent = msg || "Unknown error";
+  bar.style.display = "";
+}
+function clearError(){
+  const bar = document.getElementById("errBar");
+  if(bar) bar.style.display = "none";
+}
+
+function setConnected(connected, modeText){
+  els.connDot.className = "dot " + (connected ? "ok" : "");
+  els.connText.textContent = connected ? "Connected" : "Not connected";
+  els.modeLabel.textContent = modeText || (connected ? "Supabase" : "Offline");
+}
+
+// --- Access-code login persistence ---
+function loadAccessAuth(){
+  const saved = localStorage.getItem(AUTH_KEY);
+  const sess = sessionStorage.getItem(SESSION_AUTH_KEY);
+  let a=null;
+  try{ a = JSON.parse(sess || saved || "null"); }catch(e){ a=null; }
+  state.accessAuth = (a && a.code && a.staffId) ? a : null;
+}
+function saveAccessAuth(auth, remember){
+  state.accessAuth = auth;
+  if(remember){
+    localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+    sessionStorage.removeItem(SESSION_AUTH_KEY);
+  }else{
+    sessionStorage.setItem(SESSION_AUTH_KEY, JSON.stringify(auth));
+    localStorage.removeItem(AUTH_KEY);
+  }
+}
+function clearAccessAuth(){
+  state.accessAuth=null;
+  localStorage.removeItem(AUTH_KEY);
+  sessionStorage.removeItem(SESSION_AUTH_KEY);
+}
+
+function renderAuth(){
+  const parts = [];
+  if(state.accessAuth) parts.push(`${state.accessAuth.name} (${state.accessAuth.team || "no team"} • ${state.accessAuth.link || "no link"})`);
+  if(state.approverAuth?.role) parts.push(`Approver: ${state.approverAuth.role}`);
+  els.whoAmI.textContent = parts.length ? parts.join(" • ") : "Not signed in";
+
+  els.btnLogin.style.display = state.accessAuth ? "none" : "";
+  els.btnLogout.style.display = state.accessAuth ? "" : "none";
+  els.btnNew.disabled = !state.accessAuth;
+
+  applyMyViewButton();
+}
+
+// --- Supabase ---
+async function initSupabase(){
+  if(!SUPABASE_URL || !SUPABASE_ANON_KEY){
+    setConnected(false, "Missing Supabase keys");
+    setError("Missing Supabase URL / anon key. Paste SUPABASE_URL and SUPABASE_ANON_KEY at the top of the script.");
+    return false;
+  }
+
+  // Supabase client loader:
+  // - Prefer global UMD (window.supabase.createClient) if present
+  // - Fallback to dynamic ESM import (works on GitHub Pages + iOS Safari)
+  let createClientFn = (window.supabase && window.supabase.createClient) ? window.supabase.createClient
+                    : (typeof window.createClient === "function" ? window.createClient : null);
+
+  if(!createClientFn){
+    try{
+      const mod = await import("https://esm.sh/@supabase/supabase-js@2");
+      createClientFn = mod.createClient;
+    }catch(e){
+      setConnected(false, "Supabase library failed");
+      setError("Could not load Supabase client library. Check network filtering (CDNs) or try again. Details: " + (e && e.message ? e.message : e));
+      return false;
+    }
+  }
+
+  try{
+    supabase = createClientFn(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }catch(e){
+    setConnected(false, "Supabase init failed");
+    setError("Supabase createClient failed. Check URL/key formatting (single line, no ellipses). Details: " + (e && e.message ? e.message : e));
+    return false;
+  }
+
+  setConnected(true, "Supabase");
+  return true;
+}
+
+async function fetchApproverRole(){
+  // Optional: re-use roster app’s Supabase Auth session if present in this browser.
+  // If your roster already signs in admins/editors, this page can detect it and unlock approvals.
+  try{
+    const { data: sess } = await supabase.auth.getSession();
+    const user = sess?.session?.user;
+    if(!user){ state.approverAuth = null; return; }
+
+    // Assumption: your profiles table has a "role" column like 'admin'/'editor'/etc.
+    // If yours differs, change "role" to whatever you actually use.
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if(error){ state.approverAuth = null; return; }
+
+    const role = (data?.role || "").toLowerCase();
+    if(role==="admin" || role==="editor"){
+      state.approverAuth = { userId: user.id, role };
+    }else{
+      state.approverAuth = null;
+    }
+  }catch(_){
+    state.approverAuth = null;
+  }
+}
+
+async function fetchPeople(){
+  const { data, error } = await supabase
+    .from("staff_directory")
+    .select("id, canonical_name, default_team, default_link, access_code, is_active")
+    .order("canonical_name", { ascending:true });
+  if(error) throw error;
+
+  return (data||[])
+    .filter(x=>x.is_active)
+    .map(x=>({
+      id: x.id,
+      name: x.canonical_name,
+      team: x.default_team || "",
+      link: x.default_link || "",
+      code: (x.access_code || "").toUpperCase()
+    }));
+}
+
+async function fetchMonthEntries(){
+  const y=state.viewMonth.getFullYear(), m=state.viewMonth.getMonth();
+  const monthStart = isoDate(new Date(y,m,1));
+  const monthEnd = isoDate(new Date(y,m+1,0));
+
+  const { data, error } = await supabase
+    .from("calendar_entries")
+    .select(`
+      id,
+      staff_id,
+      start_date,
+      end_date,
+      entry_type,
+      notes,
+      team,
+      link,
+      status,
+      decided_by,
+      decided_at,
+      created_at,
+      updated_at,
+      staff_directory ( canonical_name, default_team, default_link )
+    `)
+    .gte("end_date", monthStart)
+    .lte("start_date", monthEnd)
+    .order("start_date", { ascending:true });
+
+  if(error) throw error;
+
+  return (data||[]).map(x=>({
+    id: x.id,
+    staffId: x.staff_id,
+    personName: x.staff_directory?.canonical_name || "Unknown",
+    team: x.team || x.staff_directory?.default_team || "",
+    link: x.link || x.staff_directory?.default_link || "",
+    type: x.entry_type,
+    start: x.start_date,
+    end: x.end_date,
+    notes: x.notes || "",
+    status: x.status,
+    decidedBy: x.decided_by || "",
+    decidedAt: x.decided_at || "",
+    createdAt: x.created_at || "",
+    updatedAt: x.updated_at || ""
+  }));
+}
+
+async function fetchYearEntries(year){
+  const yearStart = isoDate(new Date(year,0,1));
+  const yearEnd = isoDate(new Date(year,11,31));
+
+  const { data, error } = await supabase
+    .from("calendar_entries")
+    .select(`
+      id,
+      staff_id,
+      start_date,
+      end_date,
+      entry_type,
+      notes,
+      team,
+      link,
+      status,
+      decided_by,
+      decided_at,
+      created_at,
+      updated_at,
+      staff_directory ( canonical_name, default_team, default_link )
+    `)
+    .gte("end_date", yearStart)
+    .lte("start_date", yearEnd)
+    .order("start_date", { ascending:true });
+
+  if(error) throw error;
+
+  return (data||[]).map(x=>({
+    id: x.id,
+    staffId: x.staff_id,
+    personName: x.staff_directory?.canonical_name || "Unknown",
+    team: x.team || x.staff_directory?.default_team || "",
+    link: x.link || x.staff_directory?.default_link || "",
+    type: x.entry_type,
+    start: x.start_date,
+    end: x.end_date,
+    notes: x.notes || "",
+    status: x.status,
+    decidedBy: x.decided_by || "",
+    decidedAt: x.decided_at || "",
+    createdAt: x.created_at || "",
+    updatedAt: x.updated_at || ""
+  }));
+}
+
+
+async function fetchPendingEntriesForYear(year){
+  const start = `${year}-01-01`;
+  const end   = `${year}-12-31`;
+  const { data, error } = await supabase
+    .from("calendar_entries")
+    .select("id, staff_id, start_date, end_date, entry_type, notes, status, created_at")
+    .eq("status", "PENDING")
+    .in("entry_type", ["AL","CL"])
+    .gte("start_date", start)
+    .lte("start_date", end)
+    .order("created_at", { ascending: true });
+
+  if(error){ console.error(error); return []; }
+  return data || [];
+}
+
+function renderPendingPanel(pendingRows){
+  const panel = document.getElementById("panelApprovals");
+  const tab = document.getElementById("tabApprovals");
+  const countEl = document.getElementById("pendingCount");
+  const table = document.getElementById("pendingTable");
+  const tbody = table ? table.querySelector("tbody") : null;
+
+  const isApprover = !!state.approverAuth;
+
+  if(tab) tab.style.display = isApprover ? "" : "none";
+  if(panel) panel.style.display = isApprover ? "" : "none";
+
+  if(!isApprover || !tbody || !countEl) return;
+
+  countEl.textContent = `${pendingRows.length} pending`;
+  const peopleById = new Map(state.people.map(p=>[p.id, p]));
+  tbody.innerHTML = "";
+
+  if(!pendingRows.length){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="7" class="muted">No pending requests.</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  pendingRows.forEach(e=>{
+    const p = peopleById.get(e.staff_id);
+    const name = p?.name || "Unknown";
+    const team = p?.team || "";
+    const link = p?.link || "";
+
+    const tr = document.createElement("tr");
+    const dateTxt = `${escapeHtml(fmtUKISO(e.start_date))}${e.end_date!==e.start_date ? " → "+escapeHtml(fmtUKISO(e.end_date)) : ""}`;
+    tr.innerHTML = `
+      <td>${dateTxt}</td>
+      <td><b>${escapeHtml(name)}</b></td>
+      <td>${escapeHtml(team)}</td>
+      <td>${escapeHtml(link)}</td>
+      <td><span class="tag ${typeClass(e.entry_type)}">${escapeHtml(typeLabel(e.entry_type))}</span></td>
+      <td class="muted">${escapeHtml(e.notes || "")}</td>
+      <td class="rightAlign">
+        <button class="btn2" type="button" data-act="approve">Approve</button>
+        <button class="btn2" type="button" data-act="reject" style="border-color:#fecaca; color:#991b1b;">Reject</button>
+      </td>
+    `;
+    tr.querySelector('[data-act="approve"]').addEventListener("click", ()=>decideEntry(e.id, "APPROVED"));
+    tr.querySelector('[data-act="reject"]').addEventListener("click", ()=>decideEntry(e.id, "REJECTED"));
+    tbody.appendChild(tr);
+  });
+}
+
+
+
+async function lookupPersonByCode(code){
+  const { data, error } = await supabase
+    .from("staff_directory")
+    .select("id, canonical_name, default_team, default_link, access_code, is_active")
+    .eq("access_code", code)
+    .maybeSingle();
+  if(error) throw error;
+  if(!data || !data.is_active) return null;
+  return { id:data.id, name:data.canonical_name, team:data.default_team||"", link:data.default_link||"", code:(data.access_code||"").toUpperCase() };
+}
+
+// --- Auto-approval likelihood (client-side preview)
+function computeStatusForNewEntry(person, entry){
+  // Only A/L and C/L are subject to the 1-per-link approval rule.
+  if(!isCoverAffectingType(entry.type)) return "AUTO_APPROVED";
+
+  const days = eachDayInclusive(entry.start, entry.end);
+  const src = conflictEntriesForChecks();
+  const inWindow = days.every(d=>inRolling12Months(d));
+  if(!inWindow) return "PENDING";
+
+  for(const d of days){
+    const already = src.some(e=>{
+      if(!isCoverAffectingType(e.type)) return false;
+      if((e.link||"") !== (person.link||"")) return false;
+      if(e.status==="REJECTED" || e.status==="CANCELLED") return false;
+      const edays = eachDayInclusive(e.start, e.end);
+      return edays.includes(d);
+    });
+    if(already) return "PENDING";
+  }
+  return "AUTO_APPROVED";
+}
+function autoLikelihood(person, start, end, type){
+  if(!isCoverAffectingType(type)){
+    return {label:"No cover check for this entry type", cls:"info", hideStatus:true};
+  }
+
+  const days = eachDayInclusive(start, end);
+  const src = conflictEntriesForChecks();
+  const inWindow = days.every(d=>inRolling12Months(d));
+  if(!inWindow) return {label:"Outside 12 months → Approval required", cls:"warn"};
+
+  for(const d of days){
+    const already = src.some(e=>{
+      if(!isCoverAffectingType(e.type)) return false;
+      if((e.link||"") !== (person.link||"")) return false;
+      if(e.status==="REJECTED" || e.status==="CANCELLED") return false;
+      const edays = eachDayInclusive(e.start, e.end);
+      return edays.includes(d);
+    });
+    if(already) return {label:"Someone already has this day in your link → Approval required", cls:"warn"};
+  }
+  return {label:"Looks like you’re first in your link → Auto‑approved", cls:"ok"};
+}
+
+// --- Rendering ---
+function buildDOW(){
+  const dows=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const dowEl = document.querySelector(".dow");
+  if(!dowEl) return;
+  dowEl.innerHTML = "";
+  dows.forEach(d=>{
+    const div=document.createElement("div");
+    div.textContent=d;
+    dowEl.appendChild(div);
+  });
+}
+
+
+function renderMonth(){
+  const d = new Date(state.viewMonth); d.setDate(1);
+  const y=d.getFullYear(), m=d.getMonth();
+  els.monthTitle.textContent = d.toLocaleString("en-GB",{month:"long", year:"numeric"});
+
+  const start = new Date(state.today);
+  const end = new Date(state.today); end.setMonth(end.getMonth()+12);
+  els.windowLabel.textContent = `Window: ${fmtUKDateObj(start)} → ${fmtUKDateObj(end)}`;
+
+  const monthEntries = calendarEntries();
+  els.kpiApproved.textContent = `Approved: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && (e.status==="APPROVED"||e.status==="AUTO_APPROVED")).length}`;
+  els.kpiPending.textContent = `Pending: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="PENDING").length}`;
+  els.kpiRejected.textContent = `Rejected: ${monthEntries.filter(e=>isCoverAffectingType(e.type) && e.status==="REJECTED").length}`;
+
+  buildDOW();
+  // Clear previous month grid (prevents stacking)
+  if(els.calendarGrid) els.calendarGrid.innerHTML = "";
+
+  const first = new Date(y,m,1);
+  const firstDow = first.getDay();
+  const gridStart = addDays(first, -firstDow);
+
+  for(let i=0;i<42;i++){
+    const dateObj = addDays(gridStart, i);
+    const isOutside = dateObj.getMonth()!==m;
+    const cell=document.createElement("div");
+    cell.className = "dayCell" + (isOutside ? " isOutside":"") + (sameDay(dateObj,state.today) ? " isToday":"");
+    const dayStr = isoDate(dateObj);
+
+    const num=document.createElement("div");
+    num.className="dayNum";
+    num.innerHTML = `<span>${dateObj.getDate()}</span><span class="tiny">${dateObj.toLocaleString("en-GB",{weekday:"short"})}</span>`;
+    cell.appendChild(num);
+
+    // System labels
+    if(isPayDay(dateObj)) addSystemChip(cell, "Pay Day");
+    if(dateObj.getDay()===0){ // Sunday
+      addSystemChip(cell, `Week ${weekNumberForSunday(dateObj)}`);
+    }
+
+    const events = monthEntries
+      .filter(e=> (e.start <= dayStr && e.end >= dayStr) && e.status!=="CANCELLED")
+      .sort((a,b)=> (a.link||"").localeCompare(b.link||"") || (a.personName||"").localeCompare(b.personName||""));
+
+    const maxShow=999;
+    events.slice(0,maxShow).forEach(e=>{
+      const chip=document.createElement("div");
+      chip.className="eventChip";
+      const typeLbl = entryTypeLabel(e.type);
+      const tcls = typeClass(e.type);
+      const [sLbl, sCls] = statusTag(e.status);
+      const showStatus = isCoverAffectingType(e.type) || (e.status !== "AUTO_APPROVED" && e.status !== "APPROVED");
+      chip.innerHTML = `<div class="meta">
+                          <b>${escapeHtml(e.personName)}</b>
+                          <span>${escapeHtml(e.team || "")}${e.team ? " • " : ""}${escapeHtml(e.link)} • ${escapeHtml(typeLbl)}</span>
+                        </div>
+                        <div class="pillRow">
+                          <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+                          ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
+                        </div>`;
+      chip.title = e.notes || "";
+      chip.addEventListener("click", ()=> openEntryModal(e.id));
+      entriesWrap.appendChild(chip);
+    });
+
+    if(events.length>maxShow){
+      const more=document.createElement("div");
+      more.className="hint";
+      more.textContent = `+${events.length-maxShow} more…`;
+      cell.appendChild(more);
+    }
+
+    cell.appendChild(entriesWrap);
+
+    cell.addEventListener("click", ()=> openDaySheet(dayStr));
+    cell.addEventListener("dblclick", ()=>{ if(state.accessAuth) openNewEntry(dayStr); });
+    els.calendarGrid.appendChild(cell);
+  }
+}
+
+
+function populateFilters(){
+  // Link options (actual link group)
+  const links=[...new Set((state.entriesYear.length?state.entriesYear:state.entriesMonth).map(e=>e.link).filter(Boolean))].sort();
+  els.fltLink.innerHTML = `<option value="">All links</option>` + links.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join("");
+
+  
+// Person options
+const src = (state.entriesYear && state.entriesYear.length) ? state.entriesYear : state.entriesMonth;
+const peopleMap = new Map();
+(src || []).forEach(e=>{
+  const id = e.staffId || e.personId || "";
+  const name = e.personName || e.person || e.staffName || "";
+  if(!id && !name) return;
+  const key = id || name;
+  if(!peopleMap.has(key)) peopleMap.set(key, { id: key, name: name || key });
+});
+const people = Array.from(peopleMap.values()).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+els.fltPerson.innerHTML = `<option value="">All people</option>` + people.map(p=>`<option value="${escapeHtml(String(p.id))}">${escapeHtml(String(p.name))}</option>`).join("");
+  // Type options (leave type)
+  const types=[...new Set((state.entriesYear.length?state.entriesYear:state.entriesMonth).map(e=>e.type).filter(Boolean))].sort();
+  els.fltType.innerHTML = `<option value="">All types</option>` + types.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(entryTypeLabel(x))}</option>`).join("");
+
+  // Status options
+  const statuses=[...new Set((state.entriesYear.length?state.entriesYear:state.entriesMonth).map(e=>e.status).filter(Boolean))].sort();
+  const prettyStatus = (s)=>{
+    const k=String(s||"").toLowerCase();
+    if(k==="approved") return "Approved";
+    if(k==="pending") return "Pending";
+    if(k==="rejected") return "Rejected";
+    if(k==="auto") return "Auto";
+    return String(s||"");
+  };
+  els.fltStatus.innerHTML = `<option value="">All statuses</option>` + statuses.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(prettyStatus(x))}</option>`).join("");
+
+  // Scope options (preserve selection)
+  const prevScope = els.fltScope.value || "view";
+  els.fltScope.innerHTML = `<option value="view">This view</option><option value="year">Whole year</option>`;
+  els.fltScope.value = prevScope;
+}
+
+
+function renderTypeStatusPills(e){
+  const typeLbl = entryTypeLabel(e.type);
+  const tcls = typeClass(e.type);
+  const [sLbl, sCls] = statusTag(e.status);
+  const showStatus = isCoverAffectingType(e.type) || (e.status !== "AUTO_APPROVED" && e.status !== "APPROVED");
+  return `<div class="pillRow">
+            <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+            ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
+          </div>`;
+}
+
+function allEntries(){
+  const a = state.entriesMonth || [];
+  const b = state.entriesYear || [];
+  if(!b.length) return a;
+  // merge, prefer year (superset) but avoid dupes
+  const map = new Map();
+  a.forEach(e=>map.set(e.id, e));
+  b.forEach(e=>map.set(e.id, e));
+  return Array.from(map.values());
+}
+
+function renderList(){
+  const link = els.fltLink.value;
+  const type = els.fltType.value;
+  const status = els.fltStatus.value;
+  const personId = els.fltPerson.value;
+
+  const scope = (els.fltScope && els.fltScope.value) ? els.fltScope.value : "view";
+  const src = (scope==="year") ? (state.entriesYear||[]) : (state.entriesMonth||[]);
+
+  const rows = src.filter(e=>{
+    if(e.status==="CANCELLED") return false;
+    if(link && e.link !== link) return false;
+    if(type && e.type !== type) return false;
+    if(status && e.status !== status) return false;
+    if(personId && e.staffId !== personId) return false;
+    return true;
+  }).sort((a,b)=>a.start.localeCompare(b.start)|| (a.link||"").localeCompare(b.link||"") || (a.personName||"").localeCompare(b.personName||""));
+
+  els.listCount.textContent = `${rows.length} shown`;
+  els.listBody.innerHTML="";
+
+  const isApprover = !!state.approverAuth;
+
+  rows.forEach(e=>{
+        const canEdit = state.accessAuth && e.staffId === state.accessAuth.staffId;
+    const canDecide = isApprover && isCoverAffectingType(e.type) && e.status==="PENDING";
+
+    const tr=document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHtml(fmtUKISO(e.start))}${e.end!==e.start ? " → "+escapeHtml(fmtUKISO(e.end)) : ""}</td>
+                    <td>${escapeHtml(e.personName)}</td>
+                    <td>${escapeHtml(e.team||"")}</td>
+                    <td>${escapeHtml(e.link)}</td>
+                    <td>${escapeHtml(entryTypeLabel(e.type))}</td>
+                    <td>${renderTypeStatusPills(e)}</td>
+                    <td class="rightAlign">
+                      ${canEdit ? `<button class="secondary tinyBtn" data-edit="${e.id}">Edit</button>` : `<span class="muted">—</span>`}
+                      ${canDecide ? ` <button class="secondary tinyBtn" data-appr="${e.id}">Approve</button>
+                                    <button class="secondary tinyBtn" data-rej="${e.id}">Reject</button>` : ``}
+                    </td>`;
+    els.listBody.appendChild(tr);
+  });
+
+  els.listBody.querySelectorAll("button[data-edit]").forEach(btn=>{
+    btn.addEventListener("click", ()=> openEntryModal(btn.getAttribute("data-edit")));
+  });
+  els.listBody.querySelectorAll("button[data-appr]").forEach(btn=>{
+    btn.addEventListener("click", ()=> decideEntry(btn.getAttribute("data-appr"), "APPROVED"));
+  });
+  els.listBody.querySelectorAll("button[data-rej]").forEach(btn=>{
+    btn.addEventListener("click", ()=> decideEntry(btn.getAttribute("data-rej"), "REJECTED"));
+  });
+}
+
+// --- Modals ---
+function openLogin(){
+  if(!els.loginModal) return;
+  els.accessCode.value = "";
+  els.rememberMe.checked = false;
+  els.loginModal.style.display = "flex";
+  setTimeout(()=>els.accessCode?.focus(), 50);
+}
+function closeLogin(){
+  if(els.loginModal) els.loginModal.style.display = "none";
+}
+let selectedEntryId = null;
+
+function openEntryModal(entryId){
+  const e = allEntries().find(x=>x.id===entryId);
+  if(!e) return;
+  selectedEntryId = entryId;
+
+  const canEdit = state.accessAuth && e.staffId === state.accessAuth.staffId;
+
+  els.entryTitle.textContent = canEdit ? "Edit your entry" : "View entry";
+  els.eType.value = e.type;
+
+  // Identity fields are always locked (person/team/link)
+  lockSelect(els.ePerson, e.person || "", e.person || "");
+  lockSelect(els.eTeam, e.team || "", e.team || "");
+  lockSelect(els.eLink, e.link || "", e.link || "");
+
+  els.eStart.value = e.start;
+  els.eEnd.value = e.end;
+  els.eNotes.value = e.notes || "";
+
+  // Only these are editable (and only for your own entries)
+  [els.eType, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=!canEdit);
+
+  els.btnSaveEntry.style.display = canEdit ? "" : "none";
+  els.btnDeleteEntry.style.display = canEdit ? "" : "none";
+
+  if(state.accessAuth){
+    updateAutoHint();
+  }else{
+    els.autoHint.textContent = "Sign in to create or edit your own entries.";
+  }
+
+  els.entryModal.style.display="flex";
+}
+
+function openNewEntry(seedDateStr){
+  if(!state.accessAuth){ openLogin(); return; }
+  selectedEntryId=null;
+  els.entryTitle.textContent = "New entry";
+
+  // Lock identity to the signed-in user
+  lockSelect(els.ePerson, state.accessAuth.staffId || "", state.accessAuth.name || "");
+  lockSelect(els.eTeam, state.accessAuth.team || "", state.accessAuth.team || "");
+  lockSelect(els.eLink, state.accessAuth.link || "", state.accessAuth.link || "");
+  setEntryTypeOptions();
+
+
+  els.eType.value="AL";
+  const seed = seedDateStr || isoDate(state.today);
+  els.eStart.value=seed; els.eEnd.value=seed; els.eNotes.value="";
+
+  // Only these are editable
+  [els.eType, els.eStart, els.eEnd, els.eNotes].forEach(x=>x.disabled=false);
+
+  els.btnSaveEntry.style.display="";
+  els.btnDeleteEntry.style.display="none";
+  updateAutoHint();
+  els.entryModal.style.display="flex";
+}
+function closeEntry(){ els.entryModal.style.display="none"; }
+
+function updateAutoHint(){
+  if(!state.accessAuth){ els.autoHint.textContent = "Sign in to create or edit your own entries."; return; }
+  const type = els.eType.value;
+  const start = els.eStart.value;
+  const end = els.eEnd.value;
+  const like = autoLikelihood(state.accessAuth, start||isoDate(state.today), end||start||isoDate(state.today, els.eType.value), type);
+  if(like.hideStatus){
+    els.autoHint.innerHTML = `<span class="tag info">${escapeHtml(like.label)}</span>`;
+  }else{
+    els.autoHint.innerHTML = `<span class="tag ${like.cls}">${escapeHtml(like.label)}</span>`;
+  }
+}
+
+// --- Writes (basic direct writes for v1; harden later via RPC + RLS)
+async function writeAudit(entryId, action, detail){
+  try{
+    const actor = state.approverAuth ? `APPROVER:${state.approverAuth.userId}` : `STAFF:${state.accessAuth?.staffId || "unknown"}`;
+    await supabase.from("calendar_audit").insert({
+      entry_id: entryId,
+      action,
+      actor,
+      detail: detail || null
+    });
+  }catch(_){
+    // Audit failure should not block ops. Humans love that.
+  }
+}
+
+async function saveEntry(){
+  if(!state.accessAuth) return;
+
+  const type = els.eType.value;
+  const team = state.accessAuth.team || "";
+  const link = state.accessAuth.link || "";
+  const staffId = state.accessAuth.staffId || "";
+  const staffName = state.accessAuth.name || "";
+const start = els.eStart.value;
+  const end = els.eEnd.value;
+  const notes = els.eNotes.value.trim();
+
+  if(!start || !end){ alert("Pick start and end dates."); return; }
+  if(end < start){ alert("End date cannot be before start date."); return; }
+let status = "PENDING";
+  if(!selectedEntryId){
+    status = computeStatusForNewEntry(state.accessAuth, {start, end, link, type});
+  }else{
+    const old = allEntries().find(x=>x.id===selectedEntryId);
+    if(!old){
+      status = isCoverAffectingType(type) ? "PENDING" : "AUTO_APPROVED";
+    }else{
+      status = isCoverAffectingType(type) ? old.status : "AUTO_APPROVED";
+    }
+  }
+
+  if(selectedEntryId){
+    const { error } = await supabase
+      .from("calendar_entries")
+      .update({
+        entry_type: type,
+        team,
+        link,
+        start_date: start,
+        end_date: end,
+        notes,
+        status,
+        updated_by: "STAFF",
+      })
+      .eq("id", selectedEntryId)
+      .eq("staff_id", state.accessAuth.staffId);
+
+    if(error){ console.error(error); alert("Save failed."); return; }
+    await writeAudit(selectedEntryId, "UPDATE", { type, team, link, start, end });
+  }else{
+    const { data, error } = await supabase
+      .from("calendar_entries")
+      .insert({
+        staff_id: staffId,
+        start_date: start,
+        end_date: end,
+        entry_type: type,
+        notes,
+        team,
+        link,
+        status,
+        created_by: "STAFF",
+        updated_by: "STAFF"
+      })
+      .select("id")
+      .single();
+
+    if(error){ console.error(error); alert("Create failed."); return; }
+    await writeAudit(data.id, "CREATE", { type, team, link, start, end, status });
+  }
+
+  closeEntry();
+  await refreshAll();
+}
+
+async function cancelEntry(){
+  if(!state.accessAuth || !selectedEntryId) return;
+  if(!confirm("Cancel this entry?")) return;
+
+  const { error } = await supabase
+    .from("calendar_entries")
+    .update({ status:"CANCELLED", updated_by:"STAFF" })
+    .eq("id", selectedEntryId)
+    .eq("staff_id", state.accessAuth.staffId);
+
+  if(error){ console.error(error); alert("Cancel failed."); return; }
+  await writeAudit(selectedEntryId, "CANCEL", {});
+  closeEntry();
+  await refreshAll();
+}
+
+async function decideEntry(entryId, newStatus){
+  if(!state.approverAuth) return alert("Approver rights not detected.");
+  if(!confirm(`${newStatus==="APPROVED" ? "Approve" : "Reject"} this request?`)) return;
+
+  const { error } = await supabase
+    .from("calendar_entries")
+    .update({
+      status: newStatus,
+      decided_by: "APPROVER",
+      decided_at: new Date().toISOString(),
+      updated_by: "APPROVER"
+    })
+    .eq("id", entryId);
+
+  if(error){ console.error(error); alert("Decision failed."); return; }
+  await writeAudit(entryId, newStatus==="APPROVED" ? "APPROVE" : "REJECT", {});
+  await refreshAll();
+}
+
+// --- Login ---
+async function doLogin(){
+  const code = normaliseCode(els.accessCode.value);
+  const remember = !!els.rememberMe.checked;
+  if(code.length!==5){ alert("Enter a 5‑character code."); return; }
+
+  try{
+    const person = await lookupPersonByCode(code);
+    if(!person){ alert("Code not recognised."); return; }
+    saveAccessAuth({ staffId: person.id, name: person.name, team: person.team || "", link: person.link, code }, remember);
+    closeLogin();
+    renderAuth();
+    await refreshAll();
+  }catch(e){
+    console.error(e);
+    alert("Login failed.");
+  }
+}
+
+async function refreshAll(){
+  try{
+    clearError();
+  loadMyView();
+  loadAccessAuth();
+  await fetchApproverRole();
+  renderAuth();
+
+  state.people = await fetchPeople();
+  state.entriesMonth = await fetchMonthEntries();
+
+  // Approvals: fetch pending leave for visible year (approvers only)
+  if(state.approverAuth){
+    state.pending = await fetchPendingEntriesForYear(state.viewMonth.getFullYear());
+  }else{
+    state.pending = [];
+  }
+
+
+  // If list is scoped to whole year, fetch/cache year data for the visible year.
+  const scope = (els.fltScope && els.fltScope.value) ? els.fltScope.value : "view";
+  if(scope==="year"){
+    const y = state.viewMonth.getFullYear();
+    if(state.entriesYearFor !== y){
+      state.entriesYear = await fetchYearEntries(y);
+      state.entriesYearFor = y;
+    }
+  }else{
+    // Keep cache but do not force a refetch
+  }
+
+
+  // If access-code user was deactivated or code changed, clear it.
+  if(state.accessAuth){
+    const still = state.people.find(p=>p.id===state.accessAuth.staffId && p.code===state.accessAuth.code);
+    if(!still){
+      clearAccessAuth();
+      renderAuth();
+    }else{
+      state.accessAuth.name = still.name;
+      state.accessAuth.team = still.team;
+      state.accessAuth.link = still.link;
+      const remember = !!localStorage.getItem(AUTH_KEY);
+      saveAccessAuth(state.accessAuth, remember);
+    }
+  }
+
+  populateFilters();
+  renderMonth();
+  renderList();
+  renderPendingPanel(state.pending || []);
+
+  }catch(e){
+    console.error(e);
+    setError((e && (e.message||e.error_description)) ? (e.message||e.error_description) : String(e));
+    setConnected(false, 'Error');
+  }
+}
+
+
+// --- Back button ---
+function gotoBack(){
+  if(BACK_TO_ROSTER_URL){
+    window.location.href = BACK_TO_ROSTER_URL;
+  }else{
+    history.back();
+  }
+}
+
+// --- Events ---
+els.btnBack.addEventListener("click", gotoBack);
+els.btnPrev.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewMonth.getMonth()-1); refreshAll(); });
+els.btnNext.addEventListener("click", ()=>{ state.viewMonth.setMonth(state.viewMonth.getMonth()+1); refreshAll(); });
+els.btnToday.addEventListener("click", ()=>{ const t=new Date(); t.setDate(1); t.setHours(0,0,0,0); state.viewMonth=t; refreshAll(); });
+
+els.btnMyView && els.btnMyView.addEventListener("click", ()=>{
+  if(!state.accessAuth) return;
+  state.myView = !state.myView;
+  saveMyView();
+  applyMyViewButton();
+  renderMonth();
+});
+
+els.btnLogin.addEventListener("click", openLogin);
+
+  if(els.loginModal){
+    els.loginModal.addEventListener("click", (e)=>{ if(e.target===els.loginModal) closeLogin(); });
+  }
+els.btnLogout.addEventListener("click", ()=>{ clearAccessAuth(); renderAuth(); refreshAll(); });
+els.btnNew.addEventListener("click", ()=> openNewEntry());
+
+els.btnCloseLogin.addEventListener("click", closeLogin);
+els.loginBack.addEventListener("click", (e)=>{ if(e.target===els.loginBack) closeLogin(); });
+els.btnDoLogin.addEventListener("click", doLogin);
+
+  if(els.loginBack) els.loginBack.addEventListener("click", closeLogin);
+  if(els.btnCloseLogin) els.btnCloseLogin.addEventListener("click", closeLogin);
+els.accessCode.addEventListener("keydown", (e)=>{ if(e.key==="Enter") doLogin(); });
+
+els.btnCloseEntry.addEventListener("click", closeEntry);
+els.entryModal.addEventListener("click", (e)=>{ if(e.target===els.entryModal) closeEntry(); });
+els.btnSaveEntry.addEventListener("click", saveEntry);
+els.btnDeleteEntry.addEventListener("click", cancelEntry);
+
+["change","input"].forEach(evt=>{
+  [els.eStart, els.eEnd, els.eType, els.eLink].forEach(el=>{
+    el.addEventListener(evt, ()=>{ if(state.accessAuth) updateAutoHint(); });
+  });
+});
+
+if(els.fltScope){
+  els.fltScope.addEventListener("change", ()=>{
+    // scope impacts which rows are loaded (month vs year)
+    refreshAll();
+  });
+}
+
+[els.fltLink, els.fltType, els.fltStatus, els.fltPerson].forEach(x=>x.addEventListener("change", renderList));
+
+// Init
+(async function init(){
+  els.modeLabel.textContent = "Supabase";
+  loadMyView();
+  applyMyViewButton();
+  if(!(await initSupabase())) return;
+  setEntryTypeOptions();
+  await refreshAll();
+})();
+
+  // ===== Tabs (UI only; does not touch business logic) =====
+  const tabCalendar = document.getElementById('tabCalendar');
+  const tabList = document.getElementById('tabList');
+  const tabApprovals = document.getElementById('tabApprovals');
+  const panelCalendar = document.getElementById('panelCalendar');
+  const panelList = document.getElementById('panelList');
+  const panelApprovals = document.getElementById('panelApprovals');
+
+  function setTab(which) {
+    const cal = which === 'cal';
+    const list = which === 'list';
+    const appr = which === 'appr';
+
+    tabCalendar.setAttribute('aria-selected', cal ? 'true' : 'false');
+    tabList.setAttribute('aria-selected', list ? 'true' : 'false');
+    tabApprovals && tabApprovals.setAttribute('aria-selected', appr ? 'true' : 'false');
+
+    panelCalendar.classList.toggle('active', cal);
+    panelList.classList.toggle('active', list);
+    panelApprovals && panelApprovals.classList.toggle('active', appr);
+
+    // Keep scroll position sane
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  tabCalendar?.addEventListener('click', () => setTab('cal'));
+  tabList?.addEventListener('click', () => setTab('list'));
+  tabApprovals?.addEventListener('click', () => setTab('appr'));
+
+  // If user clicks a “List” edit action (if present), ensure list tab is visible.
+  window.__LBB_setTab = setTab;
+  
+
+// ===== Mobile day sheet (tap a day to see all entries neatly) =====
+const isMobileUI = () => window.matchMedia('(max-width: 700px)').matches;
+function openDaySheet(dayStr){
+  if(!isMobileUI()) return;
+  const sheet = document.getElementById('daySheet');
+  const title = document.getElementById('daySheetTitle');
+  const body  = document.getElementById('daySheetBody');
+  if(!sheet||!title||!body) return;
+  title.textContent = `Entries: ${dayStr}`;
+  body.innerHTML = '';
+
+  const entries = (state.entriesMonth||[]).filter(e=>{
+    // inclusive date range
+    const s = (e.start_date||e.start||'').slice(0,10);
+    const t = (e.end_date||e.end||s).slice(0,10);
+    return (dayStr>=s && dayStr<=t);
+  });
+
+  if(entries.length===0){
+    const p=document.createElement('div');
+    p.className='muted';
+    p.textContent='No entries.';
+    body.appendChild(p);
+  } else {
+    entries
+      .sort((a,b)=> (a.person||'').localeCompare(b.person||''))
+      .forEach(e=>{
+        // reuse the normal card builder by faking a day cell container
+        const chip=document.createElement('div');
+        chip.className='entryCard';
+        const typeLbl = e.entry_type || e.type || '';
+        const statusLbl = (e.status||'').toLowerCase();
+        const tcls = typeClass(typeLbl);
+        const sCls = statusClass(statusLbl);
+        const sLbl = prettyStatus(statusLbl);
+        const showStatus = shouldShowStatus(typeLbl);
+        chip.innerHTML = `
+          <div class="entryTop">
+            <div>
+              <div class="entryTitle">${escapeHtml(e.person||'')}</div>
+              <div class="entryMeta">${escapeHtml(e.link||'')} • ${escapeHtml(e.team||'')} • ${escapeHtml(typeLbl)}</div>
+            </div>
+            <div class="tagRow">
+              <span class="tag ${tcls}">${escapeHtml(typeLbl)}</span>
+              ${showStatus ? `<span class="tag ${sCls}">${escapeHtml(sLbl)}</span>` : ``}
+            </div>
+          </div>`;
+        chip.title = e.notes || '';
+        chip.addEventListener('click', ()=> openEntryModal(e.id));
+        body.appendChild(chip);
+      });
+  }
+
+  sheet.style.display='block';
+}
+function closeDaySheet(){
+  const sheet=document.getElementById('daySheet');
+  if(sheet) sheet.style.display='none';
+}
+window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDaySheet(); });
+</script>
+
+<!-- Mobile day sheet -->
+<div id="daySheet" onclick="if(event.target.id==='daySheet') closeDaySheet()">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheetHead">
+      <div class="sheetTitle" id="daySheetTitle">Entries</div>
+      <button class="closeBtn" onclick="closeDaySheet()">Close</button>
+    </div>
+    <div class="sheetBody" id="daySheetBody"></div>
+  </div>
+</div>
+
+</body>
+</html>
