@@ -745,13 +745,18 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
   .tabs{position:sticky; top:0; z-index:15; background:var(--bg); padding:.5rem 0}
   .card{border-radius:16px}
 
-  /* Calendar becomes horizontally scrollable, not squashed */
-  .calScroll{
+  /*
+    Calendar layout strategy:
+    - Non-mobile-companion pages (desktop build) can side-scroll to keep 7 readable columns.
+    - The *mobile companion* should compact to fit the screen, so we explicitly DO NOT
+      apply the side-scroll/min-width behaviour when body has .mobile-companion.
+  */
+  body:not(.mobile-companion) .calScroll{
     overflow-x:auto;
     -webkit-overflow-scrolling:touch;
     padding-bottom:6px;
   }
-  #calendarGrid{
+  body:not(.mobile-companion) #calendarGrid{
     min-width: 980px; /* ensures 7 columns remain readable */
   }
 
@@ -775,7 +780,8 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
 @media (max-width: 520px){
   main{padding:.6rem}
   .dayCell{min-height:150px}
-  #calendarGrid{min-width: 920px;}
+  /* desktop build keeps columns readable by enabling horizontal scroll on small widths */
+  body:not(.mobile-companion) #calendarGrid{min-width: 920px;}
 }
 
 /* ===== My View toggle ===== */
@@ -787,6 +793,9 @@ select.locked:disabled{opacity:1; background:#f3f4f6; color:#374151;}
 
 /* ===== Mobile Companion Mode (PWA-style) ===== */
 body.mobile-companion{ overscroll-behavior: none; }
+body.mobile-companion .calendar{ overflow-x: hidden; }
+body.mobile-companion .calScroll{ overflow-x: hidden; }
+body.mobile-companion #calendarGrid{ min-width: 0 !important; width: 100% !important; }
 @media (max-width: 700px){
   /* Make month fit the viewport like a real mobile calendar */
   .container{ padding: 10px; }
@@ -1198,6 +1207,12 @@ function weekNumberForSunday(dateObj){
   return num;
 }
 function addSystemChip(cell, text){
+  // Ensure an entries container exists inside this day cell
+  let entriesWrap = cell.querySelector(".entriesWrap");
+  if(!entriesWrap){
+    entriesWrap = document.createElement("div");
+    entriesWrap.className = "entriesWrap";
+  }
   const chip = document.createElement("div");
   chip.className = "systemChip";
   chip.innerHTML = `<span class="muted">System</span><span>${escapeHtml(text)}</span>`;
@@ -1823,7 +1838,12 @@ function renderMonth(){
     num.innerHTML = `<span>${dateObj.getDate()}</span><span class="tiny">${dateObj.toLocaleString("en-GB",{weekday:"short"})}</span>`;
     cell.appendChild(num);
 
-    // System labels
+      // Entries wrapper (all chips/cards live here)
+      const entriesWrap = document.createElement("div");
+      entriesWrap.className = "entriesWrap";
+      cell.appendChild(entriesWrap);
+
+      // System labels
     if(isPayDay(dateObj)) addSystemChip(cell, "Pay Day");
     if(dateObj.getDay()===0){ // Sunday
       addSystemChip(cell, `Week ${weekNumberForSunday(dateObj)}`);
