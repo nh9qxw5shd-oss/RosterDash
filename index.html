@@ -2091,112 +2091,115 @@ function shouldAutoExpandMonth(year, monthIdx) {
       e.returnValue = "";
     });
 
-    // Apply a tag from the tray to a single cell.
-    // Default UI behaviour: toggle (click again removes).
-    // Programmatic use (e.g. LBB sync): pass tagOverride and opts.mode='add'
-    // to ensure the tag is present without toggling it off.
-    function applyTagToCell(sectionId, rowIndex, dayKey, tagOverride = null, opts = {}) {
-      if (!currentWeek) return false;
+    // Apply a tag from the tray to a single cell
+    function applyTagToCell(sectionId, rowIndex, dayKey) {
+      if (!currentWeek || !activeTag) return;
+      if (isEffectiveReadOnly()) return;
 
-      const section = currentWeek.data.sections.find(s => s.id === sectionId);
-      if (!section) return false;
+      const sections = currentWeek.data.sections || [];
+      const section = sections.find((s) => s.id === sectionId);
+      if (!section) return;
+      if (!section.rows || !section.rows[rowIndex]) return;
+
       const row = section.rows[rowIndex];
-      if (!row) return false;
-
       ensureRowTags(row);
-      const tags = ensureRowTagsForSync(row);
 
-      const requested = tagOverride ?? activeTag;
-      if (!requested) return false;
+      const tags = row.tags[dayKey] || [];
+      const tagUpper = activeTag.toUpperCase();
 
-      const normTag = (t) => String(t || "").toUpperCase().replace(/\s+/g, "").replace(/\//g, "");
-      const key = normTag(requested);
-
-      const storedTag = (key === "AL") ? "A/L" :
-                        (key === "CL") ? "C/L" :
-                        (key === "NA") ? "N/A" :
-                        String(requested).toUpperCase();
-
-      // N/A is only allowed on blanks, RD, or Sundays (same rules as the tray)
-      if (key === "NA" && !cellAllowsNA(sectionId, rowIndex, dayKey)) {
-        if (!opts.silent) toast("N/A only allowed on blank, RD or Sunday cells", "warn");
-        return false;
-      }
-
-      if (key === "CLEAR") {
-        tags.length = 0;
+      // CLEAR mode: remove all tags from this cell + reset RDW flag
+      if (tagUpper === "CLEAR") {
+        row.tags[dayKey] = [];
+        if (row.rdw && Object.prototype.hasOwnProperty.call(row.rdw, dayKey)) {
+          row.rdw[dayKey] = false;
+        }
       } else {
-        const has = tags.some(t => normTag(t) === key);
-        const mode = (opts && opts.mode) ? String(opts.mode) : "toggle";
-
-        if (mode === "add") {
-          if (!has) tags.push(storedTag);
+        const existingIndex = tags.findIndex((t) => String(t).toUpperCase() === tagUpper);
+        if (existingIndex >= 0) {
+          // Remove tag
+          tags.splice(existingIndex, 1);
+          row.tags[dayKey] = tags;
+          if (tagUpper === "RDW") {
+            if (!row.rdw) row.rdw = {};
+            row.rdw[dayKey] = false;
+          }
         } else {
-          if (has) {
-            // remove first matching tag by normalised key
-            const idx = tags.findIndex(t => normTag(t) === key);
-            if (idx > -1) tags.splice(idx, 1);
-          } else {
-            tags.push(storedTag);
+                   // Add tag
+          tags.push(tagUpper);
+          row.tags[dayKey] = tags;
+          if (tagUpper === "RDW") {
+            if (!row.rdw) row.rdw = {};
+            row.rdw[dayKey] = true;
+          }
+
+          // If A/L or C/L is being added, mirror the existing shift into the uncovered row (unless it's SPARE)
+          if (
+  tagUpper === "AL" ||
+  tagUpper === "CL" ||
+  tagUpper === "BO" ||
+  tagUpper === "SICK"
+) {
+            // Make sure the uncovered structure exists for this section/day
+            ensureUncovered(section);
+            const u = section.uncovered[dayKey];
+            const shiftVal =
+              row.shifts && row.shifts[dayKey]
+                ? String(row.shifts[dayKey])
+                : "";
+            const upperShift = shiftVal.toUpperCase();
+
+            // Ignore pure spare shifts
+            if (shiftVal && !upperShift.includes("SPARE")) {
+              if (!u.s1) {
+                u.s1 = shiftVal;
+              } else if (!u.s2) {
+                u.s2 = shiftVal;
+              }
+            }
           }
         }
       }
 
-      // --- Mirror covered shift into Uncovered when appropriate ---
-      const normSet = new Set(tags.map(normTag));
-
-      // If A/L or C/L is added, mirror the shift into the Uncovered row unless SPARE
-      if (normSet.has("AL") || normSet.has("CL")) {
-        const cell = (row.days && row.days[dayKey]) ? row.days[dayKey] : "";
-        if (cell && !/^SPARE/i.test(String(cell))) {
-          const uncoveredRow = getUncoveredRow(sectionId);
-          if (uncoveredRow) {
-            const uncDays = uncoveredRow.days ||= {};
-            const uncCell = (uncDays[dayKey] ||= {});
-            uncCell.text = String(cell);
-            uncCell.fromRowId = row.id;
-          }
-        }
-      }
-
-      // If RDW is applied, mirror shift into Uncovered
-      if (normSet.has("RDW")) {
-        const cell = (row.days && row.days[dayKey]) ? row.days[dayKey] : "";
-        if (cell) {
-          const uncoveredRow = getUncoveredRow(sectionId);
-          if (uncoveredRow) {
-            const uncDays = uncoveredRow.days ||= {};
-            const uncCell = (uncDays[dayKey] ||= {});
-            uncCell.text = String(cell);
-            uncCell.fromRowId = row.id;
-          }
-        }
-      }
-
-      // Other modifiers that should also create cover pressure
-      if (normSet.has("BO") || normSet.has("SICK") || normSet.has("MED") || normSet.has("COURSE") || normSet.has("MEETING")) {
-        const cell = (row.days && row.days[dayKey]) ? row.days[dayKey] : "";
-        if (cell) {
-          const uncoveredRow = getUncoveredRow(sectionId);
-          if (uncoveredRow) {
-            const uncDays = uncoveredRow.days ||= {};
-            const uncCell = (uncDays[dayKey] ||= {});
-            uncCell.text = String(cell);
-            uncCell.fromRowId = row.id;
-          }
-        }
-      }
-
-      // Mark roster as dirty
+ // Mark roster as dirty
       hasUnsavedChanges = true;
 
-      if (!(opts && opts.skipRender)) {
-        renderRosterGrid(currentWeek.data);
-      }
-
-      return true;
+      renderRosterGrid(currentWeek.data);
+      runPostRenderChecks();
     }
 
+    // ===== ROSTER RENDERING =====
+    
+    // ===== Little Black Book (calendar) -> Roster tag sync =====
+    function isoDate(d){
+      const x = new Date(d);
+      if (isNaN(x)) return null;
+      const y = x.getFullYear();
+      const m = String(x.getMonth()+1).padStart(2,"0");
+      const da = String(x.getDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }
+    function addDays(d, n){
+      const x = new Date(d);
+      x.setDate(x.getDate() + n);
+      return x;
+    }
+    function datesOverlap(aStart, aEnd, bStart, bEnd){
+      return aStart <= bEnd && aEnd >= bStart;
+    }
+    function ensureRowTagsForSync(row){
+      if (!row.tags || typeof row.tags !== "object") row.tags = {};
+    }
+    function addTagToRowDay(row, dayKey, tag){
+      ensureRowTagsForSync(row);
+      const up = String(tag||"").toUpperCase();
+      if (!up) return;
+      const cur = Array.isArray(row.tags[dayKey]) ? row.tags[dayKey] : [];
+      const exists = cur.some(t => String(t).toUpperCase() === up);
+      if (!exists){
+        cur.push(up);
+        row.tags[dayKey] = cur;
+      }
+    }
     function cellAllowsNA(row, dayKey){
       // N/A should only apply to: blank cells, RD cells, or Sundays.
       if (String(dayKey).toLowerCase() === "sun") return true;
@@ -2261,8 +2264,8 @@ function shouldAutoExpandMonth(year, monthIdx) {
       });
 
       // Walk roster rows and apply tags where calendar overlap exists
-      currentWeek.data.sections.forEach((section)=>{
-        (section.rows || []).forEach((row, rowIndex)=>{
+      currentWeek.data.sections.forEach(section=>{
+        (section.rows || []).forEach(row=>{
           const name = String(row.staff_name || "").trim();
           if (!name) return;
 
@@ -2282,15 +2285,14 @@ function shouldAutoExpandMonth(year, monthIdx) {
               const dayKey = days[i];
               const type = String(e.entry_type || "").toUpperCase();
 
-              // Use the same engine as the normal tag tray so uncovered mirroring logic
-              // (A/L or C/L -> move shift to Uncovered) is applied consistently.
-              if (type === "AL" || type === "CL" || type === "NA"){
-                const ok = applyTagToCell(section.id, rowIndex, dayKey, type, {
-                  mode: "add",        // never toggle off during sync
-                  silent: true,       // don't spam warnings during sync
-                  skipRender: true    // render once at the end
-                });
-                if (ok) applied++;
+              if (type === "AL" || type === "CL"){
+                addTagToRowDay(row, dayKey, type);
+                applied++;
+              } else if (type === "NA"){
+                if (cellAllowsNA(row, dayKey)){
+                  addTagToRowDay(row, dayKey, "NA");
+                  applied++;
+                }
               }
             }
           });
