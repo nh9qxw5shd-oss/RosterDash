@@ -3042,7 +3042,7 @@ if (btnChangeLog) {
     }
 
     // Year-scoped analytics: counts per person & weekly stats
-    function computeYearAnalyticsFromWeeks(weeks) {
+    function computeYearAnalyticsFromWeeks(weeks, year) {
       const weeklyStats = [];
       const usageMap = {};
       const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -3061,7 +3061,14 @@ if (btnChangeLog) {
         struct.sections.forEach((section) => {
           ensureUncovered(section);
 
-          days.forEach((day) => {
+          days.forEach((day, di) => {
+      // Year boundary guard: weeks overlap years, but the "selected year" analytics should only count
+      // days that actually fall within that calendar year.
+      if (typeof year === 'number') {
+        const cellDate = getDateForDay(w.week_ending, di);
+        if (cellDate && cellDate.getFullYear() !== year) return;
+      }
+
             const u = section.uncovered?.[day];
             if (typeof u === "string") {
               if (u.trim()) weekUncovered += 1;
@@ -3084,6 +3091,13 @@ if (btnChangeLog) {
             }
 
             days.forEach((day) => {
+// Year-boundary guard: weeks are stored by week_ending, which can straddle year boundaries.
+// Only count cells whose actual calendar date falls within the selected year.
+if (typeof year === "number") {
+  const _d = getDateForDay(w.week_ending, day);
+  if (_d && _d.getFullYear() !== year) return;
+}
+
               const shift = row.shifts?.[day];
               const v = (shift || "").toUpperCase();
               const tags = Array.isArray(row.tags?.[day]) ? row.tags[day] : [];
@@ -3313,7 +3327,7 @@ usedDatesSorted.forEach((useDate) => {
       }
 
       const { weeklyStats, usageStats } =
-        computeYearAnalyticsFromWeeks(yearWeeks || []);
+        computeYearAnalyticsFromWeeks(yearWeeks || [], year);
 
       const leaveDetailYear = computeLeaveDetailForYear(yearWeeks || [], year);
 
